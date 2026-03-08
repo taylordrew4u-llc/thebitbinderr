@@ -355,7 +355,6 @@ struct ModernSideMenu: View {
                             .background(Circle().fill(Color.white.opacity(0.08)))
                     }
                     .buttonStyle(FABButtonStyle())
-                    }
                 }
 
                 HStack(spacing: 16) {

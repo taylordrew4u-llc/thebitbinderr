@@ -55,44 +55,47 @@ struct BrainstormView: View {
             )
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
-            .safeAreaInset(alignment: .bottomTrailing) {
-                HStack(spacing: 12) {
-                    Button {
-                        toggleRecording()
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(isRecording
-                                    ? LinearGradient(colors: [.red, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                    : (roastMode ? AppTheme.Colors.roastEmberGradient : LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                )
-                                .frame(width: 56, height: 56)
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Spacer()
+                    HStack(spacing: 12) {
+                        Button {
+                            toggleRecording()
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(isRecording
+                                        ? LinearGradient(colors: [.red, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        : (roastMode ? AppTheme.Colors.roastEmberGradient : LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    )
+                                    .frame(width: 56, height: 56)
 
-                            Image(systemName: isRecording ? "stop.fill" : "mic.fill")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
+                                Image(systemName: isRecording ? "stop.fill" : "mic.fill")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            .shadow(color: (isRecording ? Color.red : (roastMode ? AppTheme.Colors.roastAccent : .blue)).opacity(0.35), radius: 10, y: 5)
+                            .scaleEffect(isRecording ? 1.1 : 1.0)
+                            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
                         }
-                        .shadow(color: (isRecording ? Color.red : (roastMode ? AppTheme.Colors.roastAccent : .blue)).opacity(0.35), radius: 10, y: 5)
-                        .scaleEffect(isRecording ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
-                    }
-                    .buttonStyle(FABButtonStyle())
+                        .buttonStyle(FABButtonStyle())
 
-                    Button {
-                        showAddSheet = true
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(roastMode ? AppTheme.Colors.roastEmberGradient : AppTheme.Colors.brandGradient)
-                                .frame(width: 56, height: 56)
+                        Button {
+                            showAddSheet = true
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(roastMode ? AppTheme.Colors.roastEmberGradient : AppTheme.Colors.brandGradient)
+                                    .frame(width: 56, height: 56)
 
-                            Image(systemName: "plus")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(.white)
+                                Image(systemName: "plus")
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            .shadow(color: (roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.brand).opacity(0.35), radius: 10, y: 5)
                         }
-                        .shadow(color: (roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.brand).opacity(0.35), radius: 10, y: 5)
+                        .buttonStyle(FABButtonStyle())
                     }
-                    .buttonStyle(FABButtonStyle())
                 }
                 .padding(.trailing, 20)
                 .padding(.bottom, 16)
