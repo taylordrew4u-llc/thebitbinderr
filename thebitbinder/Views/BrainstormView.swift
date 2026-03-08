@@ -63,6 +63,16 @@ struct BrainstormView: View {
                             toggleRecording()
                         } label: {
                             ZStack {
+                                // Pulsing ring — only while recording
+                                if isRecording {
+                                    Circle()
+                                        .stroke(Color.red.opacity(0.4), lineWidth: 3)
+                                        .frame(width: 66, height: 66)
+                                        .scaleEffect(isRecording ? 1.2 : 1.0)
+                                        .opacity(isRecording ? 0 : 1)
+                                        .animation(.easeOut(duration: 1.0).repeatForever(autoreverses: false), value: isRecording)
+                                }
+
                                 Circle()
                                     .fill(isRecording
                                         ? LinearGradient(colors: [.red, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -75,8 +85,6 @@ struct BrainstormView: View {
                                     .foregroundColor(.white)
                             }
                             .shadow(color: (isRecording ? Color.red : (roastMode ? AppTheme.Colors.roastAccent : .blue)).opacity(0.35), radius: 10, y: 5)
-                            .scaleEffect(isRecording ? 1.1 : 1.0)
-                            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
                         }
                         .buttonStyle(FABButtonStyle())
 
@@ -120,6 +128,13 @@ struct BrainstormView: View {
             }
         }
         .tint(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
+        .onChange(of: speechManager.isRecording) { _, managerRecording in
+            if !managerRecording && isRecording {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    isRecording = false
+                }
+            }
+        }
     }
     
     // MARK: - Zoom Control
@@ -266,7 +281,6 @@ struct BrainstormView: View {
     
     private func stopRecording() {
         speechManager.stopRecording()
-        isRecording = false
         
         // Save the transcribed text as a new idea
         let text = speechManager.transcribedText
@@ -278,6 +292,11 @@ struct BrainstormView: View {
             )
             modelContext.insert(newIdea)
             speechManager.transcribedText = ""
+        }
+        
+        // Reset recording state with animation so pulsing ring is cleanly removed
+        withAnimation(.easeOut(duration: 0.2)) {
+            isRecording = false
         }
     }
 }
