@@ -54,6 +54,7 @@ struct ModernNotepad: View {
                 // ── Paper ──────────────────────────────────
                 (roastMode ? AppTheme.Colors.roastBackground : AppTheme.Colors.paperCream)
                     .ignoresSafeArea()
+                    .onTapGesture { dismiss() }
 
                 // ── Ruled lines ────────────────────────────
                 Canvas { ctx, size in
@@ -118,6 +119,7 @@ struct ModernNotepad: View {
                 Button("Done") { dismiss() }
                     .foregroundColor(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
                     .fontWeight(.semibold)
+                    .buttonStyle(TouchReactiveStyle(pressedScale: 0.90, hapticStyle: .light))
             }
         }
     }

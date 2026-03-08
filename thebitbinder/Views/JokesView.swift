@@ -111,7 +111,7 @@ struct JokesView: View {
                         )
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ChipStyle())
             
             Text("The Hits")
                 .font(.caption)
@@ -278,14 +278,14 @@ struct JokesView: View {
                                 .strokeBorder(AppTheme.Colors.roastAccent.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [6]))
                         )
                     }
-                    .buttonStyle(.plain)
+                    .cardPress()
 
                     // Roast target cards
                     ForEach(roastTargets) { target in
                         NavigationLink(destination: RoastTargetDetailView(target: target)) {
                             RoastTargetCard(target: target)
                         }
-                        .buttonStyle(.plain)
+                        .cardPress()
                         .contextMenu {
                             Button(role: .destructive) {
                                 roastTargetToDelete = target
@@ -1115,7 +1115,7 @@ struct FolderChip: View {
             .background(isSelected ? Capsule().fill(accent) : Capsule().fill(AppTheme.Colors.paperAged))
             .foregroundColor(isSelected ? .white : AppTheme.Colors.textSecondary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ChipStyle())
     }
 }
 

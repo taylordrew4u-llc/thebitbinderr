@@ -188,7 +188,7 @@ struct MainTabView: View {
                 Color.black.opacity(roastMode ? 0.65 : 0.4)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        dismissKeyboard()
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             showMenu = false
                         }
@@ -227,6 +227,7 @@ struct MainTabView: View {
                                         .foregroundColor(roastMode ? .white : AppTheme.Colors.inkBlack)
                                 }
                             }
+                            .buttonStyle(FABButtonStyle())
                             .transition(.scale.combined(with: .opacity))
                         }
 
@@ -248,6 +249,7 @@ struct MainTabView: View {
                             }
                             .shadow(color: AppTheme.Colors.aiAccent.opacity(0.35), radius: 8, y: 4)
                         }
+                        .buttonStyle(FABButtonStyle())
 
                         // Menu button
                         Button {
@@ -269,6 +271,7 @@ struct MainTabView: View {
                                 radius: 10, y: 4
                             )
                         }
+                        .buttonStyle(FABButtonStyle())
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 56)
@@ -351,6 +354,8 @@ struct ModernSideMenu: View {
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(Color.white.opacity(0.08)))
                     }
+                    .buttonStyle(FABButtonStyle())
+                    }
                 }
 
                 HStack(spacing: 16) {
@@ -391,6 +396,7 @@ struct ModernSideMenu: View {
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(Color.white.opacity(0.12)))
                     }
+                    .buttonStyle(FABButtonStyle())
                 }
 
                 HStack(spacing: 16) {
@@ -464,7 +470,7 @@ struct ModernMenuItem: View {
                         : Color.clear)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MenuItemStyle(isSelected: isSelected))
         .animation(.easeInOut(duration: 0.16), value: isSelected)
     }
 }

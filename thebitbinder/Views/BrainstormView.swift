@@ -55,7 +55,7 @@ struct BrainstormView: View {
             )
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
-            .safeAreaInset(edge: .bottom, alignment: .trailing) {
+            .safeAreaInset(alignment: .bottomTrailing) {
                 HStack(spacing: 12) {
                     Button {
                         toggleRecording()
@@ -76,6 +76,7 @@ struct BrainstormView: View {
                         .scaleEffect(isRecording ? 1.1 : 1.0)
                         .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
                     }
+                    .buttonStyle(FABButtonStyle())
 
                     Button {
                         showAddSheet = true
@@ -91,6 +92,7 @@ struct BrainstormView: View {
                         }
                         .shadow(color: (roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.brand).opacity(0.35), radius: 10, y: 5)
                     }
+                    .buttonStyle(FABButtonStyle())
                 }
                 .padding(.trailing, 20)
                 .padding(.bottom, 16)
@@ -106,7 +108,7 @@ struct BrainstormView: View {
             .alert("Microphone Permission Required", isPresented: $showingPermissionAlert) {
                 Button("Settings", role: .none) {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
-                        openURL(url)
+                        UIApplication.shared.open(url)
                     }
                 }
                 Button("Cancel", role: .cancel) {}
@@ -182,12 +184,14 @@ struct BrainstormView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(ideas) { idea in
-                    IdeaCard(idea: idea, scale: gridScale, roastMode: roastMode)
-                        .onTapGesture {
-                            selectedIdea = idea
-                            showEditSheet = true
-                        }
-                        .contextMenu {
+                    Button {
+                        selectedIdea = idea
+                        showEditSheet = true
+                    } label: {
+                        IdeaCard(idea: idea, scale: gridScale, roastMode: roastMode)
+                    }
+                    .cardPress()
+                    .contextMenu {
                             Button {
                                 selectedIdea = idea
                                 showEditSheet = true
@@ -424,4 +428,3 @@ struct IdeaCard: View {
     BrainstormView()
         .modelContainer(for: BrainstormIdea.self, inMemory: true)
 }
-

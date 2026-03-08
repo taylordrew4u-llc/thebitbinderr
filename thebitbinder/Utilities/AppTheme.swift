@@ -164,6 +164,96 @@ extension View {
                 .frame(height: width)
         }
     }
+
+    /// Make any view feel alive on press — scale down + haptic
+    func touchReactive(scale: CGFloat = 0.92, haptic: UIImpactFeedbackGenerator.FeedbackStyle = .light) -> some View {
+        self.buttonStyle(TouchReactiveStyle(pressedScale: scale, hapticStyle: haptic))
+    }
+
+    /// Subtle press effect for cards/rows — lighter scale + no haptic
+    func cardPress() -> some View {
+        self.buttonStyle(TouchReactiveStyle(pressedScale: 0.97, hapticStyle: nil))
+    }
+
+    /// Heavy press for primary actions — deeper scale + medium haptic
+    func heavyPress() -> some View {
+        self.buttonStyle(TouchReactiveStyle(pressedScale: 0.88, hapticStyle: .medium))
+    }
+}
+
+// MARK: - Touch Reactive Button Style
+
+/// Reusable button style: scale animation + optional haptic on press
+struct TouchReactiveStyle: ButtonStyle {
+    let pressedScale: CGFloat
+    let hapticStyle: UIImpactFeedbackGenerator.FeedbackStyle?
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? pressedScale : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                if pressed, let style = hapticStyle {
+                    #if !targetEnvironment(macCatalyst)
+                    UIImpactFeedbackGenerator(style: style).impactOccurred()
+                    #endif
+                }
+            }
+    }
+}
+
+/// FAB-specific style: bouncy scale + glow pulse on press
+struct FABButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
+            .brightness(configuration.isPressed ? 0.1 : 0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.55), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                if pressed {
+                    #if !targetEnvironment(macCatalyst)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    #endif
+                }
+            }
+    }
+}
+
+/// Menu row style: slide right + highlight on press
+struct MenuItemStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0, anchor: .leading)
+            .offset(x: configuration.isPressed ? 4 : 0)
+            .opacity(configuration.isPressed ? 0.80 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                if pressed {
+                    #if !targetEnvironment(macCatalyst)
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    #endif
+                }
+            }
+    }
+}
+
+/// Chip/tag press style: pop scale
+struct ChipStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.90 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                if pressed {
+                    #if !targetEnvironment(macCatalyst)
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                    #endif
+                }
+            }
+    }
 }
 
 // MARK: - Cross-platform helpers
