@@ -107,6 +107,9 @@ struct SettingsView: View {
                     Text("Automatically back up all your jokes, roasts, recordings, and photos to iCloud.")
                 }
                 
+                // MARK: - Snarky Notifications
+                SnarkyNotificationSection()
+                
                 // MARK: - Export Jokes
                 Section {
                     Button {
@@ -518,6 +521,67 @@ struct ReorderLayoutView: View {
         if ordered.count == AppScreen.allCases.count {
             screens = ordered
         }
+    }
+}
+
+// MARK: - Snarky Notification Settings
+
+struct SnarkyNotificationSection: View {
+    @ObservedObject private var manager = NotificationManager.shared
+
+    // Convert minutes-from-midnight ↔ Date for the DatePicker
+    private var startDate: Binding<Date> {
+        Binding(
+            get: { dateFromMinutes(manager.startMinute) },
+            set: { manager.startMinute = minutesFromDate($0) }
+        )
+    }
+    private var endDate: Binding<Date> {
+        Binding(
+            get: { dateFromMinutes(manager.endMinute) },
+            set: { manager.endMinute = minutesFromDate($0) }
+        )
+    }
+
+    var body: some View {
+        Section {
+            Toggle(isOn: $manager.isEnabled) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Daily Snarky Reminder")
+                            .foregroundColor(.primary)
+                        Text("A random roast to keep you writing")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "bell.badge.fill")
+                        .foregroundColor(.orange)
+                }
+            }
+
+            if manager.isEnabled {
+                DatePicker("Earliest", selection: startDate, displayedComponents: .hourAndMinute)
+                DatePicker("Latest",   selection: endDate,   displayedComponents: .hourAndMinute)
+            }
+        } header: {
+            Text("Notifications")
+        } footer: {
+            if manager.isEnabled {
+                Text("You'll get one snarky push notification per day at a random time between these hours.")
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func dateFromMinutes(_ mins: Int) -> Date {
+        Calendar.current.date(bySettingHour: mins / 60, minute: mins % 60, second: 0, of: Date()) ?? Date()
+    }
+
+    private func minutesFromDate(_ date: Date) -> Int {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
     }
 }
 

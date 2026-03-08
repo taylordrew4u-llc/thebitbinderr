@@ -1,6 +1,7 @@
 import UIKit
 import AVFoundation
 import FirebaseCore
+import UserNotifications
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
@@ -9,14 +10,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ = MemoryManager.shared
         
         // Configure Firebase synchronously on main thread.
-        // Must happen before any Firebase service is accessed.
         FirebaseApp.configure()
+        
+        // Set up snarky notification manager as the UNUserNotificationCenter delegate
+        UNUserNotificationCenter.current().delegate = NotificationManager.shared
+        NotificationManager.shared.scheduleIfNeeded()
         
         return true
     }
     
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        // Reschedule snarky notification if one was consumed
+        NotificationManager.shared.scheduleIfNeeded()
+    }
+    
     func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
-        // Additional memory warning handling
         MemoryManager.shared.handleMemoryWarning()
     }
 }
