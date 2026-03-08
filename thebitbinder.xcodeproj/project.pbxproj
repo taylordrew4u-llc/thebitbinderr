@@ -161,7 +161,7 @@
 				CODE_SIGN_ENTITLEMENTS = thebitbinder/thebitbinder.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = R44WG942GS;
 				ENABLE_APP_SANDBOX = YES;
@@ -208,7 +208,7 @@
 				CODE_SIGN_ENTITLEMENTS = thebitbinder/thebitbinder.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = R44WG942GS;
 				ENABLE_APP_SANDBOX = YES;
