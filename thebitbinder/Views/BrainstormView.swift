@@ -1,0 +1,427 @@
+//
+//  BrainstormView.swift
+//  thebitbinder
+//
+//  Brainstorm tab for quick joke thoughts with zoomable grid
+//
+
+import SwiftUI
+import SwiftData
+import Speech
+import AVFoundation
+
+struct BrainstormView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \BrainstormIdea.dateCreated, order: .reverse) private var ideas: [BrainstormIdea]
+    @AppStorage("roastModeEnabled") private var roastMode = false
+    
+    @State private var showAddSheet = false
+    @State private var gridScale: CGFloat = 1.0
+    @State private var isRecording = false
+    @StateObject private var speechManager = SpeechRecognitionManager()
+    @State private var showingPermissionAlert = false
+    @State private var selectedIdea: BrainstormIdea?
+    @State private var showEditSheet = false
+    
+    // Grid columns based on scale
+    private var columns: [GridItem] {
+        let count = max(2, Int(4 / gridScale))
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                // Background
+                (roastMode ? AppTheme.Colors.roastBackground : AppTheme.Colors.paperCream)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Zoom control slider
+                    zoomControl
+                    
+                    if ideas.isEmpty {
+                        emptyState
+                    } else {
+                        ideaGrid
+                    }
+                }
+            }
+            .navigationTitle(roastMode ? "🔥 Fire Ideas" : "Brainstorm")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(
+                roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
+                for: .navigationBar
+            )
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
+            .safeAreaInset(edge: .bottom, alignment: .trailing) {
+                HStack(spacing: 12) {
+                    Button {
+                        toggleRecording()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(isRecording
+                                    ? LinearGradient(colors: [.red, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    : (roastMode ? AppTheme.Colors.roastEmberGradient : LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                )
+                                .frame(width: 56, height: 56)
+
+                            Image(systemName: isRecording ? "stop.fill" : "mic.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .shadow(color: (isRecording ? Color.red : (roastMode ? AppTheme.Colors.roastAccent : .blue)).opacity(0.35), radius: 10, y: 5)
+                        .scaleEffect(isRecording ? 1.1 : 1.0)
+                        .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
+                    }
+
+                    Button {
+                        showAddSheet = true
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(roastMode ? AppTheme.Colors.roastEmberGradient : AppTheme.Colors.brandGradient)
+                                .frame(width: 56, height: 56)
+
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .shadow(color: (roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.brand).opacity(0.35), radius: 10, y: 5)
+                    }
+                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 16)
+            }
+            .sheet(isPresented: $showAddSheet) {
+                AddBrainstormIdeaSheet(isVoiceNote: false, initialText: "")
+            }
+            .sheet(isPresented: $showEditSheet) {
+                if let idea = selectedIdea {
+                    EditBrainstormIdeaSheet(idea: idea)
+                }
+            }
+            .alert("Microphone Permission Required", isPresented: $showingPermissionAlert) {
+                Button("Settings", role: .none) {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Please enable microphone access in Settings to use voice recording.")
+            }
+        }
+        .tint(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
+    }
+    
+    // MARK: - Zoom Control
+    private var zoomControl: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "minus.magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(roastMode ? .white.opacity(0.6) : AppTheme.Colors.textSecondary)
+            
+            Slider(value: $gridScale, in: 0.5...2.0, step: 0.1)
+                .tint(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
+            
+            Image(systemName: "plus.magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(roastMode ? .white.opacity(0.6) : AppTheme.Colors.textSecondary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(roastMode ? AppTheme.Colors.roastCard : AppTheme.Colors.surfaceElevated)
+                .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+    
+    // MARK: - Empty State
+    private var emptyState: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            
+            ZStack {
+                Circle()
+                    .fill(roastMode ? AppTheme.Colors.roastCard : AppTheme.Colors.surfaceElevated)
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: roastMode ? "flame.fill" : "lightbulb.fill")
+                    .font(.system(size: 50))
+                    .foregroundStyle(
+                        roastMode
+                        ? AppTheme.Colors.roastEmberGradient
+                        : LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom)
+                    )
+            }
+            
+            VStack(spacing: 8) {
+                Text(roastMode ? "No Fire Ideas Yet" : "No Ideas Yet")
+                    .font(.system(size: 24, weight: .bold, design: .serif))
+                    .foregroundColor(roastMode ? .white : AppTheme.Colors.inkBlack)
+                
+                Text("Tap the + button or use voice to capture your thoughts quickly")
+                    .font(.system(size: 15))
+                    .foregroundColor(roastMode ? .white.opacity(0.6) : AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+            
+            Spacer()
+        }
+    }
+    
+    // MARK: - Idea Grid
+    private var ideaGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(ideas) { idea in
+                    IdeaCard(idea: idea, scale: gridScale, roastMode: roastMode)
+                        .onTapGesture {
+                            selectedIdea = idea
+                            showEditSheet = true
+                        }
+                        .contextMenu {
+                            Button {
+                                selectedIdea = idea
+                                showEditSheet = true
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            
+                            Button(role: .destructive) {
+                                withAnimation {
+                                    modelContext.delete(idea)
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                }
+            }
+            .padding(16)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: gridScale)
+        }
+    }
+    
+    // MARK: - Speech Recognition
+    private func toggleRecording() {
+        if isRecording {
+            stopRecording()
+        } else {
+            requestPermissionAndStartRecording()
+        }
+    }
+    
+    private func requestPermissionAndStartRecording() {
+        SFSpeechRecognizer.requestAuthorization { status in
+            DispatchQueue.main.async {
+                switch status {
+                case .authorized:
+                    if #available(iOS 17.0, *) {
+                        AVAudioApplication.requestRecordPermission { granted in
+                            DispatchQueue.main.async {
+                                if granted {
+                                    self.startRecording()
+                                } else {
+                                    self.showingPermissionAlert = true
+                                }
+                            }
+                        }
+                    } else {
+                        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                            DispatchQueue.main.async {
+                                if granted {
+                                    self.startRecording()
+                                } else {
+                                    self.showingPermissionAlert = true
+                                }
+                            }
+                        }
+                    }
+                default:
+                    self.showingPermissionAlert = true
+                }
+            }
+        }
+    }
+    
+    private func startRecording() {
+        speechManager.startRecording()
+        isRecording = true
+    }
+    
+    private func stopRecording() {
+        speechManager.stopRecording()
+        isRecording = false
+        
+        // Save the transcribed text as a new idea
+        let text = speechManager.transcribedText
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let newIdea = BrainstormIdea(
+                content: text,
+                colorHex: BrainstormIdea.randomColor(),
+                isVoiceNote: true
+            )
+            modelContext.insert(newIdea)
+            speechManager.transcribedText = ""
+        }
+    }
+}
+
+// MARK: - Speech Recognition Manager
+
+class SpeechRecognitionManager: ObservableObject {
+    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var audioEngine = AVAudioEngine()
+    
+    @Published var transcribedText = ""
+    @Published var isRecording = false
+    
+    func startRecording() {
+        // Reset any previous task
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        transcribedText = ""
+        
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("Audio session setup failed: \(error)")
+            return
+        }
+        
+        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+        
+        guard let recognitionRequest = recognitionRequest else {
+            print("Unable to create recognition request")
+            return
+        }
+        
+        recognitionRequest.shouldReportPartialResults = true
+        
+        let inputNode = audioEngine.inputNode
+        
+        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+            guard let self = self else { return }
+            
+            if let result = result {
+                DispatchQueue.main.async {
+                    self.transcribedText = result.bestTranscription.formattedString
+                }
+            }
+            
+            if error != nil || result?.isFinal == true {
+                self.audioEngine.stop()
+                inputNode.removeTap(onBus: 0)
+                self.recognitionRequest = nil
+                self.recognitionTask = nil
+                DispatchQueue.main.async {
+                    self.isRecording = false
+                }
+            }
+        }
+        
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+            recognitionRequest.append(buffer)
+        }
+        
+        audioEngine.prepare()
+        
+        do {
+            try audioEngine.start()
+            DispatchQueue.main.async {
+                self.isRecording = true
+            }
+        } catch {
+            print("Audio engine start failed: \(error)")
+        }
+    }
+    
+    func stopRecording() {
+        audioEngine.stop()
+        recognitionRequest?.endAudio()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        
+        DispatchQueue.main.async {
+            self.isRecording = false
+        }
+    }
+    
+    deinit {
+        recognitionTask?.cancel()
+        audioEngine.stop()
+    }
+}
+
+// MARK: - Idea Card
+
+struct IdeaCard: View {
+    let idea: BrainstormIdea
+    let scale: CGFloat
+    let roastMode: Bool
+    
+    private var cardColor: Color {
+        Color(hex: idea.colorHex) ?? Color.yellow.opacity(0.3)
+    }
+    
+    private var cardHeight: CGFloat {
+        max(80, 120 * scale)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Voice indicator
+            if idea.isVoiceNote {
+                HStack {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(roastMode ? .white.opacity(0.5) : .black.opacity(0.4))
+                    Spacer()
+                }
+            }
+            
+            Text(idea.content)
+                .font(.system(size: max(12, 14 * scale), weight: .medium))
+                .foregroundColor(roastMode ? .white.opacity(0.9) : .black.opacity(0.85))
+                .lineLimit(Int(max(3, 5 * scale)))
+                .multilineTextAlignment(.leading)
+            
+            Spacer()
+            
+            // Timestamp
+            Text(idea.dateCreated.formatted(date: .abbreviated, time: .shortened))
+                .font(.system(size: max(8, 10 * scale)))
+                .foregroundColor(roastMode ? .white.opacity(0.4) : .black.opacity(0.4))
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: cardHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(roastMode ? AppTheme.Colors.roastCard : cardColor)
+                .shadow(color: .black.opacity(roastMode ? 0.3 : 0.08), radius: 4, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(roastMode ? AppTheme.Colors.roastAccent.opacity(0.2) : .clear, lineWidth: 1)
+        )
+    }
+}
+
+#Preview {
+    BrainstormView()
+        .modelContainer(for: BrainstormIdea.self, inMemory: true)
+}
+

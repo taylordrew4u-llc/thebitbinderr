@@ -1,0 +1,18 @@
+# Build artifacts
+build/
+*.xcarchive/
+
+# Xcode user state
+*.xcuserstate
+xcuserdata/
+*.xcuserdatad/
+
+# DS_Store
+.DS_Store
+**/.DS_Store
+
+# Derived Data
+DerivedData/
+
+# SPM
+.build/

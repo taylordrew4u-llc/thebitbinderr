@@ -154,7 +154,7 @@ class TextRecognitionService {
         
         // Method 2: Double line breaks
         print("📝 Method 2: Paragraphs")
-        let paras = cleaned.components(separatedBy: "\n{2,}")
+        let paras = cleaned.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         print("📝 Found \(paras.count) paragraphs")
         if paras.count >= 2 {
             for p in paras {
@@ -240,17 +240,17 @@ class TextRecognitionService {
         let trimmed = jokeContent.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Minimum length check - avoid incomplete jokes
-        let minimumLength = 12
+        let minimumLength = 5  // Reduced from 12 - even short jokes are valid
+        
+        // Check if joke is too short
+        if trimmed.count < minimumLength {
+            print("⚠️ VALIDATION: Joke too short (\(trimmed.count) < \(minimumLength)): \(trimmed)")
+            return (title: "", isValid: false)
+        }
         
         // Check for incomplete sentences (ends with only partial punctuation or no punctuation)
         let lastChar = trimmed.last ?? " "
         let endsWithoutPunctuation = !trimmed.hasSuffix(".") && !trimmed.hasSuffix("!") && !trimmed.hasSuffix("?")
-        
-        let endsWithPunctuation = trimmed.hasSuffix(".") || trimmed.hasSuffix("!") || trimmed.hasSuffix("?")
-        if trimmed.count < minimumLength && !(endsWithPunctuation && trimmed.count >= 10) {
-            print("⚠️ VALIDATION: Joke too short (relaxed check)")
-            return (title: "", isValid: false)
-        }
         
         let looksIncomplete = trimmed.contains("...") || trimmed.contains("…") || 
                              (lastChar.isLetter && endsWithoutPunctuation && trimmed.count < 100)
@@ -271,17 +271,17 @@ class TextRecognitionService {
         }
         
         // Ensure title is not empty and is reasonable
-        if title.isEmpty || title.count < 5 {
+        if title.isEmpty {
             title = String(trimmed.prefix(50)).trimmingCharacters(in: .whitespaces)
         }
         
-        // Fallback: if still too short or doesn't seem like a title, mark as invalid
-        if title.count < 5 {
-            print("⚠️ VALIDATION: Title too short: \(title)")
+        // Fallback: if title is empty, mark as invalid
+        if title.isEmpty || title.count < 2 {
+            print("⚠️ VALIDATION: Title too short or empty: '\(title)'")
             return (title: "", isValid: false)
         }
         
-        print("✅ VALIDATION: Valid joke with title: \(title.prefix(40))...")
+        print("✅ VALIDATION: Valid joke with title '\(title.prefix(40))'")
         return (title: title, isValid: true)
     }
     

@@ -129,18 +129,25 @@ class AudioTranscriptionService {
         
         // Perform recognition
         let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SFSpeechRecognitionResult, Error>) in
+            var completed = false
+            
             recognizer.recognitionTask(with: request) { result, error in
+                guard !completed else { return }
+                
                 if let error = error {
+                    completed = true
                     continuation.resume(throwing: AudioTranscriptionError.transcriptionFailed(error.localizedDescription))
                     return
                 }
                 
                 guard let result = result else {
+                    completed = true
                     continuation.resume(throwing: AudioTranscriptionError.noSpeechDetected)
                     return
                 }
                 
                 if result.isFinal {
+                    completed = true
                     continuation.resume(returning: result)
                 }
             }

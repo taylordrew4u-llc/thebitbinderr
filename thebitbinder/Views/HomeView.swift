@@ -1,129 +1,149 @@
 import SwiftUI
 
 struct HomeView: View {
-    @State private var notepadText: String = ""
-    @State private var showingAIChat = false
+    @State private var notepadText = ""
     private let notepadKey = "notepadText"
+    @AppStorage("roastModeEnabled") private var roastMode = false
+    @StateObject private var syncService = iCloudSyncService.shared
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                // Modern notepad
-                ModernNotepad(text: $notepadText)
-                    .ignoresSafeArea(edges: .bottom)
-                
-                // AI Chat floating button
-                Button {
-                    showingAIChat = true
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 60, height: 60)
-                        
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(red: 0.4, green: 0.3, blue: 1.0), Color(red: 0.6, green: 0.2, blue: 0.9)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 54, height: 54)
-                        
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
+            ModernNotepad(text: $notepadText)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(roastMode ? "🔥 Fire Notepad" : "Notepad")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbarBackground(
+                    roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
+                    for: .navigationBar
+                )
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
+                .onAppear {
+                    notepadText = UserDefaults.standard.string(forKey: notepadKey) ?? ""
+                }
+                .onChange(of: notepadText) { _, v in
+                    UserDefaults.standard.set(v, forKey: notepadKey)
+                    // Sync thoughts to iCloud
+                    Task {
+                        await syncService.syncThoughts(v)
                     }
-                    .shadow(color: Color(red: 0.5, green: 0.3, blue: 1.0).opacity(0.5), radius: 12, x: 0, y: 6)
                 }
-                .padding(.trailing, 80)
-                .padding(.bottom, 30)
-            }
-            .navigationTitle("Notepad")
-            .navigationBarTitleDisplayMode(.large)
-            .onAppear {
-                if let saved = UserDefaults.standard.string(forKey: notepadKey) {
-                    notepadText = saved
-                }
-            }
-            .onChange(of: notepadText) { _, newValue in
-                UserDefaults.standard.set(newValue, forKey: notepadKey)
-            }
-            .sheet(isPresented: $showingAIChat) {
-                AIChatView()
-            }
         }
+        .tint(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
     }
 }
+
+// MARK: - Notepad canvas
 
 struct ModernNotepad: View {
     @Binding var text: String
-    private let lineSpacing: CGFloat = 34
+    @AppStorage("roastModeEnabled") private var roastMode = false
+
+    private let lineH: CGFloat = 32   // tight ruled line height, matches a real legal pad
+    private let leftGutter: CGFloat = 52  // margin line x
+    private let holeX: CGFloat = 18   // punch hole x center
+
+    private func dismiss() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Clean gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.99, blue: 0.96),
-                    Color(red: 0.98, green: 0.97, blue: 0.94)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            
-            // Subtle lines
-            ModernLinedBackground(lineSpacing: lineSpacing)
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+
+                // ── Paper ──────────────────────────────────
+                (roastMode ? AppTheme.Colors.roastBackground : AppTheme.Colors.paperCream)
+                    .ignoresSafeArea()
+
+                // ── Ruled lines ────────────────────────────
+                Canvas { ctx, size in
+                    let lc = roastMode
+                        ? Color(red: 0.95, green: 0.40, blue: 0.12).opacity(0.14)
+                        : AppTheme.Colors.paperLine
+                    var y = lineH
+                    while y < size.height {
+                        var p = Path()
+                        p.move(to: .init(x: 0, y: y))
+                        p.addLine(to: .init(x: size.width, y: y))
+                        ctx.stroke(p, with: .color(lc), lineWidth: 0.75)
+                        y += lineH
+                    }
+                }
                 .ignoresSafeArea()
-            
-            // Left margin accent
-            HStack(spacing: 0) {
+
+                // ── Margin line ────────────────────────────
                 Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.red.opacity(0.3), Color.red.opacity(0.15)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(width: 2)
-                    .padding(.leading, 44)
-                Spacer()
+                    .fill(roastMode ? AppTheme.Colors.roastAccent.opacity(0.45) : AppTheme.Colors.marginRed)
+                    .frame(width: 1.5)
+                    .padding(.leading, leftGutter)
+                    .ignoresSafeArea()
+
+                // ── Punch holes ────────────────────────────
+                let holeCount = max(1, Int((geo.size.height) / 76))
+                VStack(spacing: 76) {
+                    ForEach(0..<holeCount, id: \.self) { _ in
+                        ZStack {
+                            // Outer ring — paper shadow
+                            Circle()
+                                .fill(roastMode ? AppTheme.Colors.roastCard : AppTheme.Colors.paperDeep)
+                                .frame(width: 14, height: 14)
+                            // Inner hole
+                            Circle()
+                                .fill(roastMode ? AppTheme.Colors.roastBackground : AppTheme.Colors.paperAged)
+                                .frame(width: 9, height: 9)
+                        }
+                    }
+                }
+                .padding(.leading, holeX - 7)
+                .padding(.top, 20)
+                .allowsHitTesting(false)
+
+                // ── Text editor ────────────────────────────
+                TextEditor(text: $text)
+                    .scrollContentBackground(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                    .foregroundColor(roastMode ? .white.opacity(0.92) : AppTheme.Colors.inkBlack)
+                    .tint(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
+                    .font(.system(size: 17))
+                    .lineSpacing(lineH - 20)
+                    .padding(.leading, leftGutter + 14)
+                    .padding(.trailing, 20)
+                    .padding(.top, 4)
+                    .background(Color.clear)
             }
-            .ignoresSafeArea()
-            
-            // Text editor
-            TextEditor(text: $text)
-                .scrollContentBackground(.hidden)
-                .padding(.leading, 56)
-                .padding(.trailing, 70)
-                .padding(.vertical, 20)
-                .font(.system(size: 17, design: .default))
-                .lineSpacing(lineSpacing - 17)
-                .background(Color.clear)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .foregroundColor(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
+                    .fontWeight(.semibold)
+            }
         }
     }
 }
 
+// MARK: - Lined background helper (kept for any reuse)
+
 struct ModernLinedBackground: View {
     let lineSpacing: CGFloat
+    var roastMode: Bool = false
 
     var body: some View {
-        Canvas { context, size in
-            var y: CGFloat = lineSpacing
-            while y <= size.height {
-                var path = Path()
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(path, with: .color(Color.blue.opacity(0.08)), lineWidth: 1)
+        Canvas { ctx, size in
+            let c = roastMode
+                ? Color(red: 0.95, green: 0.40, blue: 0.12).opacity(0.14)
+                : AppTheme.Colors.paperLine
+            var y = lineSpacing
+            while y < size.height {
+                var p = Path()
+                p.move(to: .init(x: 0, y: y))
+                p.addLine(to: .init(x: size.width, y: y))
+                ctx.stroke(p, with: .color(c), lineWidth: 0.75)
                 y += lineSpacing
             }
         }
     }
 }
 
-#Preview {
-    HomeView()
-}
+#Preview { HomeView() }

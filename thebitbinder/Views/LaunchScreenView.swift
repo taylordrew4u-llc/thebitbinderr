@@ -8,130 +8,108 @@
 import SwiftUI
 
 struct LaunchScreenView: View {
-    @State private var logoScale: CGFloat = 0.7
-    @State private var logoOpacity: Double = 0
-    @State private var textOpacity: Double = 0
-    @State private var ringScale: CGFloat = 0.8
-    @State private var ringRotation: Double = 0
-    
-    private let primaryGradient = [Color(red: 0.3, green: 0.5, blue: 1.0), Color(red: 0.5, green: 0.3, blue: 0.9)]
-    
+    @State private var mark: CGFloat = 0
+    @State private var fade: Double  = 0
+
     var body: some View {
         ZStack {
-            // Modern gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 0.98, green: 0.97, blue: 1.0),
-                    Color.white,
-                    Color(red: 0.95, green: 0.96, blue: 1.0)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            // ── Paper background ─────────────────────────────
+            AppTheme.Colors.paperCream.ignoresSafeArea()
+
+            // Faint rules
+            Canvas { ctx, size in
+                var y: CGFloat = 32
+                while y < size.height {
+                    var p = Path()
+                    p.move(to: .init(x: 0, y: y))
+                    p.addLine(to: .init(x: size.width, y: y))
+                    ctx.stroke(p, with: .color(AppTheme.Colors.paperLine), lineWidth: 0.6)
+                    y += 32
+                }
+            }
             .ignoresSafeArea()
-            
-            VStack(spacing: 32) {
-                // Animated logo
+
+            // Red margin
+            HStack {
+                Rectangle()
+                    .fill(AppTheme.Colors.marginRed)
+                    .frame(width: 1.5)
+                    .padding(.leading, 52)
+                Spacer()
+            }
+            .ignoresSafeArea()
+
+            // ── Center mark ──────────────────────────────────
+            VStack(spacing: 28) {
+                // Book mark — spine + pages
                 ZStack {
-                    // Rotating ring
-                    Circle()
-                        .stroke(
-                            AngularGradient(
-                                colors: [primaryGradient[0].opacity(0.3), primaryGradient[1].opacity(0.1), primaryGradient[0].opacity(0.3)],
-                                center: .center
-                            ),
-                            lineWidth: 3
-                        )
-                        .frame(width: 140, height: 140)
-                        .scaleEffect(ringScale)
-                        .rotationEffect(.degrees(ringRotation))
-                    
-                    // Main logo circle
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: primaryGradient,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 100, height: 100)
-                        .shadow(color: primaryGradient[0].opacity(0.4), radius: 20, y: 10)
-                    
-                    // Book icon
-                    Image(systemName: "book.closed.fill")
-                        .font(.system(size: 44, weight: .medium))
-                        .foregroundColor(.white)
-                    
-                    // Pencil accent
-                    Image(systemName: "pencil")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .offset(x: 30, y: 30)
-                }
-                .scaleEffect(logoScale)
-                .opacity(logoOpacity)
-                
-                // Title
-                VStack(spacing: 8) {
-                    Text("The BitBinder")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: primaryGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    
-                    Text("Your comedy companion")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .opacity(textOpacity)
-                
-                // Loading dots
-                HStack(spacing: 8) {
-                    ForEach(0..<3) { index in
-                        Circle()
-                            .fill(primaryGradient[0].opacity(0.5))
-                            .frame(width: 8, height: 8)
-                            .scaleEffect(textOpacity > 0 ? 1 : 0.5)
-                            .animation(
-                                Animation.easeInOut(duration: 0.6)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(index) * 0.15),
-                                value: textOpacity
-                            )
+                    // Shadow
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.black.opacity(0.12))
+                        .frame(width: 76, height: 96)
+                        .offset(y: 6)
+                        .blur(radius: 8)
+
+                    // Leather cover
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.Colors.leatherGradient)
+                        .frame(width: 76, height: 92)
+
+                    // Page stack highlight
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(AppTheme.Colors.paperCream)
+                        .frame(width: 56, height: 80)
+                        .offset(x: 4)
+
+                    // Rule lines on page
+                    VStack(spacing: 9) {
+                        ForEach(0..<5) { _ in
+                            Rectangle()
+                                .fill(AppTheme.Colors.paperLine)
+                                .frame(width: 38, height: 1)
+                        }
                     }
+                    .offset(x: 5)
+
+                    // Spine shadow
+                    Rectangle()
+                        .fill(Color.black.opacity(0.18))
+                        .frame(width: 10, height: 92)
+                        .offset(x: -33)
+                        .mask(
+                            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                                .frame(width: 10, height: 92)
+                                .offset(x: -33)
+                        )
                 }
-                .opacity(textOpacity)
-                .padding(.top, 8)
+                .scaleEffect(0.88 + mark * 0.12)
+                .opacity(mark)
+
+                // Wordmark
+                VStack(spacing: 6) {
+                    Text("BitBinder")
+                        .font(.system(size: 30, weight: .bold, design: .serif))
+                        .foregroundColor(AppTheme.Colors.inkBlack)
+                        .tracking(-0.5)
+
+                    Text("shut up and write some jokes")
+                        .font(.system(size: 13, weight: .regular, design: .serif))
+                        .italic()
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                        .tracking(0.2)
+                }
+                .opacity(fade)
             }
         }
         .onAppear {
-            // Logo animation
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
-                logoScale = 1.0
-                logoOpacity = 1.0
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.72).delay(0.05)) {
+                mark = 1
             }
-            
-            // Ring animation
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
-                ringScale = 1.0
-            }
-            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-                ringRotation = 360
-            }
-            
-            // Text animation
-            withAnimation(.easeOut(duration: 0.5).delay(0.4)) {
-                textOpacity = 1.0
+            withAnimation(.easeOut(duration: 0.4).delay(0.22)) {
+                fade = 1
             }
         }
     }
 }
 
-#Preview {
-    LaunchScreenView()
-}
+#Preview { LaunchScreenView() }

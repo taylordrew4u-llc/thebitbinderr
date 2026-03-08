@@ -12,7 +12,8 @@ import AVFoundation
 struct RecordingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Recording.dateCreated, order: .reverse) private var recordings: [Recording]
-    
+    @AppStorage("roastModeEnabled") private var roastMode = false
+
     @State private var searchText = ""
     @State private var showingQuickRecord = false
     
@@ -33,7 +34,7 @@ struct RecordingsView: View {
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color.red.opacity(0.12), Color.red.opacity(0.08)],
+                                        colors: [AppTheme.Colors.recordingsAccent.opacity(0.12), AppTheme.Colors.recordingsAccent.opacity(0.08)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -43,7 +44,7 @@ struct RecordingsView: View {
                                 .font(.system(size: 50))
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.red, .red.opacity(0.8)],
+                                        colors: [AppTheme.Colors.recordingsAccent, AppTheme.Colors.recordingsAccent.opacity(0.8)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -72,8 +73,14 @@ struct RecordingsView: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Recordings")
-            .searchable(text: $searchText, prompt: "Search recordings")
+            .navigationTitle(roastMode ? "🔥 Burn Recordings" : "Recordings")
+            .searchable(text: $searchText, prompt: roastMode ? "Search recordings" : "Search recordings")
+            .toolbarBackground(
+                roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
+                for: .navigationBar
+            )
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -81,7 +88,7 @@ struct RecordingsView: View {
                     } label: {
                         Image(systemName: "mic.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.recordingsAccent)
                     }
                 }
             }
@@ -112,54 +119,42 @@ struct RecordingsView: View {
 
 struct RecordingRowView: View {
     let recording: Recording
-    
-    private let accentColor = Color(red: 1.0, green: 0.35, blue: 0.4)
-    
+    @AppStorage("roastModeEnabled") private var roastMode = false
+    private let accent = AppTheme.Colors.recordingsAccent
+
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [accentColor.opacity(0.15), accentColor.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 46, height: 46)
-                
-                Image(systemName: "waveform")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(accentColor)
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .top, spacing: 0) {
+            Text("•")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(accent)
+                .frame(width: 32, alignment: .center)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(recording.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold, design: .serif))
+                    .foregroundColor(roastMode ? .white : AppTheme.Colors.inkBlack)
                     .lineLimit(1)
-                
-                HStack(spacing: 14) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 11))
-                        Text(durationString(from: recording.duration))
-                            .font(.system(size: 13))
-                    }
-                    .foregroundStyle(.secondary)
-                    
-                    Text(recording.dateCreated, format: .dateTime.month(.abbreviated).day())
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
+
+                HStack(spacing: 10) {
+                    Label(durationString(from: recording.duration), systemImage: "clock")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(accent.opacity(0.85))
+                    Spacer()
+                    Text(recording.dateCreated.formatted(.dateTime.month(.abbreviated).day()))
+                        .font(.system(size: 11))
+                        .foregroundColor(roastMode ? Color.white.opacity(0.45) : AppTheme.Colors.textTertiary)
                 }
             }
-            
+
             Spacer()
-            
+
             Image(systemName: "play.circle.fill")
                 .font(.system(size: 28))
-                .foregroundStyle(accentColor.opacity(0.8))
+                .foregroundColor(accent.opacity(0.7))
+                .padding(.leading, 12)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
     }
     
     private func durationString(from duration: TimeInterval) -> String {

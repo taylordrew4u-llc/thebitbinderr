@@ -14,6 +14,17 @@ struct JokesView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var jokes: [Joke]
     @Query private var folders: [JokeFolder]
+    @Query(sort: \RoastTarget.dateModified, order: .reverse) private var roastTargets: [RoastTarget]
+    
+    // Roast mode — toggled from Settings
+    @AppStorage("roastModeEnabled") private var roastMode = false
+    
+    // Roast sheet state
+    @State private var showingAddRoastTarget = false
+    @State private var roastTargetToDelete: RoastTarget?
+    @State private var showingDeleteRoastAlert = false
+    
+    @AppStorage("jokesViewMode") private var viewMode: JokesViewMode = .grid
     
     @State private var showingAddJoke = false
     @State private var showingScanner = false
@@ -23,6 +34,8 @@ struct JokesView: View {
     @State private var showingAutoOrganize = false
     @State private var showingExportAlert = false
     @State private var selectedFolder: JokeFolder?
+    @State private var showRecentlyAdded = false
+    @State private var showHits = false  // The Hits - perfected jokes
     @State private var searchText = ""
     @State private var exportedPDFURL: URL?
     @State private var selectedPhotos: [PhotosPickerItem] = []
@@ -39,39 +52,118 @@ struct JokesView: View {
     
     @State private var reviewCandidates: [JokeImportCandidate] = []
     @State private var showingReviewSheet = false
-    @State private var possibleDuplicates: [String] = [] // store brief descriptions
+    @State private var possibleDuplicates: [String] = []
+    
+    // Live import progress
+    @State private var importStatusMessage = ""
+    @State private var importedJokeNames: [String] = []
+    @State private var importFileCount = 0
+    @State private var importFileIndex = 0
 
+    // MARK: - The Hits Button
+    
     @ViewBuilder
-    private var folderChips: some View {
-        if !folders.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    FolderChip(
-                        name: "All Jokes",
-                        isSelected: selectedFolder == nil,
-                        action: { selectedFolder = nil }
-                    )
-                    ForEach(folders) { folder in
-                        FolderChip(
-                            name: folder.name,
-                            isSelected: selectedFolder?.id == folder.id,
-                            action: { selectedFolder = folder }
+    private var theHitsButton: some View {
+        VStack(spacing: 8) {
+            Button(action: {
+                showHits.toggle()
+                if showHits {
+                    selectedFolder = nil
+                    showRecentlyAdded = false
+                }
+            }) {
+                ZStack {
+                    // Outer glow when selected
+                    if showHits {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [Color.yellow.opacity(0.4), Color.yellow.opacity(0)],
+                                    center: .center,
+                                    startRadius: 25,
+                                    endRadius: 50
+                                )
+                            )
+                            .frame(width: 80, height: 80)
+                    }
+                    
+                    // Main circle
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: showHits 
+                                    ? [Color.yellow, Color.orange]
+                                    : [Color.yellow.opacity(0.3), Color.orange.opacity(0.2)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                folderPendingDeletion = folder
-                                showingDeleteFolderAlert = true
-                            } label: {
-                                Label("Delete Folder", systemImage: "trash")
-                            }
+                        .frame(width: 60, height: 60)
+                        .shadow(color: showHits ? .yellow.opacity(0.5) : .clear, radius: 8)
+                    
+                    // Star icon
+                    Image(systemName: showHits ? "star.fill" : "star")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(
+                            showHits 
+                                ? AnyShapeStyle(Color.white)
+                                : AnyShapeStyle(LinearGradient(colors: [.orange, .yellow], startPoint: .top, endPoint: .bottom))
+                        )
+                }
+            }
+            .buttonStyle(.plain)
+            
+            Text("The Hits")
+                .font(.caption)
+                .fontWeight(showHits ? .bold : .medium)
+                .foregroundColor(showHits ? .orange : .secondary)
+            
+            // Count badge
+            let hitsCount = jokes.filter { $0.isHit }.count
+            if hitsCount > 0 {
+                Text("\(hitsCount) perfected")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+    
+    private var folderChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                FolderChip(
+                    name: "All Jokes",
+                    isSelected: selectedFolder == nil && !showRecentlyAdded,
+                    action: { selectedFolder = nil; showRecentlyAdded = false; showHits = false }
+                )
+                FolderChip(
+                    name: "Recently Added",
+                    icon: "clock.fill",
+                    isSelected: showRecentlyAdded,
+                    action: { showRecentlyAdded = true; selectedFolder = nil; showHits = false }
+                )
+                ForEach(folders) { folder in
+                    FolderChip(
+                        name: folder.name,
+                        isSelected: selectedFolder?.id == folder.id && !showRecentlyAdded,
+                        action: { selectedFolder = folder; showRecentlyAdded = false; showHits = false }
+                    )
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            folderPendingDeletion = folder
+                            showingDeleteFolderAlert = true
+                        } label: {
+                            Label("Delete Folder", systemImage: "trash")
                         }
                     }
                 }
-                .padding(.horizontal)
             }
-            .padding(.vertical, 8)
-            .background(Color(UIColor.systemBackground))
+            .padding(.horizontal)
         }
+        .padding(.vertical, 10)
+        .background(AppTheme.Colors.paperAged)
     }
 
     @ViewBuilder
@@ -81,7 +173,7 @@ struct JokesView: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color(red: 1.0, green: 0.6, blue: 0.2).opacity(0.2), Color(red: 1.0, green: 0.6, blue: 0.2).opacity(0.05)],
+                            colors: [AppTheme.Colors.jokesAccent.opacity(0.2), AppTheme.Colors.jokesAccent.opacity(0.05)],
                             center: .center,
                             startRadius: 20,
                             endRadius: 60
@@ -89,11 +181,11 @@ struct JokesView: View {
                     )
                     .frame(width: 110, height: 110)
                 
-                Image(systemName: "face.smiling.fill")
+                Image(systemName: "theatermask.and.paintbrush.fill")
                     .font(.system(size: 48, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(red: 1.0, green: 0.6, blue: 0.2), Color(red: 1.0, green: 0.5, blue: 0.1)],
+                            colors: [AppTheme.Colors.jokesAccent, AppTheme.Colors.jokesAccent.opacity(0.7)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -114,11 +206,109 @@ struct JokesView: View {
         .padding(.horizontal, 40)
     }
 
+    // MARK: - Roast Section
+
+    @ViewBuilder
+    private var roastSection: some View {
+        if roastTargets.isEmpty {
+            // Empty roast state
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.Colors.roastAccent.opacity(0.12))
+                        .frame(width: 110, height: 110)
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [AppTheme.Colors.roastAccent, .orange],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                VStack(spacing: 8) {
+                    Text("No roast targets yet")
+                        .font(.title3.bold())
+                    Text("Add someone you want to roast and start writing jokes just for them")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                Button {
+                    showingAddRoastTarget = true
+                } label: {
+                    Label("Add First Target", systemImage: "person.badge.plus")
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.Colors.roastAccent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(40)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                    // Add new target card
+                    Button {
+                        showingAddRoastTarget = true
+                    } label: {
+                        VStack(spacing: 10) {
+                            ZStack {
+                                Circle()
+                                    .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6]))
+                                    .foregroundColor(AppTheme.Colors.roastAccent.opacity(0.4))
+                                    .frame(width: 56, height: 56)
+                                Image(systemName: "plus")
+                                    .font(.title2)
+                                    .foregroundColor(AppTheme.Colors.roastAccent)
+                            }
+                            Text("Add Person")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppTheme.Colors.roastAccent)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 160)
+                        .background(AppTheme.Colors.roastCard)
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(AppTheme.Colors.roastAccent.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [6]))
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    // Roast target cards
+                    ForEach(roastTargets) { target in
+                        NavigationLink(destination: RoastTargetDetailView(target: target)) {
+                            RoastTargetCard(target: target)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                roastTargetToDelete = target
+                                showingDeleteRoastAlert = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                .padding()
+            }
+        }
+    }
+
     
     var filteredJokes: [Joke] {
-        // Start with base jokes depending on selected folder
+        // Start with base jokes depending on selected filter
         let base: [Joke]
-        if let folder = selectedFolder {
+        if showRecentlyAdded {
+            let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+            base = jokes.filter { $0.dateCreated >= sevenDaysAgo }
+        } else if let folder = selectedFolder {
             base = jokes.filter { $0.folder?.id == folder.id }
         } else {
             base = jokes
@@ -140,234 +330,198 @@ struct JokesView: View {
     
     var body: some View {
         NavigationStack {
+            mainContent
+                .background(roastMode ? AppTheme.Colors.roastBackground : Color.clear)
+                .ignoresSafeArea(edges: roastMode ? .all : [])
+                .navigationTitle(roastMode ? "🔥 Roasts" : "Jokes")
+                .searchable(text: $searchText, prompt: roastMode ? "Search targets" : "Search jokes")
+                .toolbarBackground(
+                    roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
+                    for: .navigationBar
+                )
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
+                .onAppear { checkPendingVoiceMemoImports() }
+                .toolbar { combinedToolbarContent }
+                .photosPicker(isPresented: $showingImagePicker, selection: $selectedPhotos, matching: .images, preferredItemEncoding: .automatic)
+                .onChange(of: selectedPhotos) { oldValue, newValue in
+                    Task { await processSelectedPhotos(newValue) }
+                }
+                .modifier(JokesSheetsModifier(
+                    showingAddJoke: $showingAddJoke,
+                    showingScanner: $showingScanner,
+                    showingCreateFolder: $showingCreateFolder,
+                    showingAutoOrganize: $showingAutoOrganize,
+                    showingAudioImport: $showingAudioImport,
+                    showingTalkToText: $showingTalkToText,
+                    showingFilePicker: $showingFilePicker,
+                    showingAddRoastTarget: $showingAddRoastTarget,
+                    showingMoveJokesSheet: $showingMoveJokesSheet,
+                    showingReviewSheet: $showingReviewSheet,
+                    selectedFolder: selectedFolder,
+                    folders: folders,
+                    folderPendingDeletion: $folderPendingDeletion,
+                    reviewCandidates: reviewCandidates,
+                    possibleDuplicates: possibleDuplicates,
+                    processScannedImages: processScannedImages,
+                    processDocuments: processDocuments,
+                    moveJokes: moveJokes,
+                    deleteFolder: deleteFolder
+                ))
+                .modifier(JokesAlertsModifier(
+                    showingExportAlert: $showingExportAlert,
+                    showingImportSummary: $showingImportSummary,
+                    showingDeleteFolderAlert: $showingDeleteFolderAlert,
+                    showingDeleteRoastAlert: $showingDeleteRoastAlert,
+                    showingMoveJokesSheet: $showingMoveJokesSheet,
+                    exportedPDFURL: exportedPDFURL,
+                    importSummary: importSummary,
+                    folderPendingDeletion: $folderPendingDeletion,
+                    roastTargetToDelete: $roastTargetToDelete,
+                    jokes: jokes,
+                    shareFile: shareFile,
+                    removeJokesFromFolderAndDelete: removeJokesFromFolderAndDelete,
+                    modelContext: modelContext
+                ))
+                .overlay { importOverlay }
+        }
+    }
+
+    // MARK: - Extracted Body Subviews
+
+    @ViewBuilder
+    private var mainContent: some View {
+        if roastMode {
+            roastSection
+        } else {
             VStack(spacing: 0) {
-                // Folder selection
-                folderChips
+                // The Hits circle at the top
+                theHitsButton
                 
+                if !showHits {
+                    folderChips
+                }
                 Divider()
-                
-                // Jokes list
                 if filteredJokes.isEmpty {
                     emptyState
                 } else {
-                    List {
-                        ForEach(filteredJokes) { joke in
-                            NavigationLink(destination: JokeDetailView(joke: joke)) {
-                                JokeRowView(joke: joke)
+                    if viewMode == .grid {
+                        ScrollView {
+                            LazyVGrid(columns: [
+                                GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12)
+                            ], spacing: 12) {
+                                ForEach(filteredJokes) { joke in
+                                    NavigationLink(destination: JokeDetailView(joke: joke)) {
+                                        JokeCardView(joke: joke)
+                                    }
+                                }
                             }
+                            .padding(12)
                         }
-                        .onDelete(perform: deleteJokes)
+                        .scrollContentBackground(.hidden)
+                    } else {
+                        List {
+                            ForEach(filteredJokes) { joke in
+                                NavigationLink(destination: JokeDetailView(joke: joke)) {
+                                    JokeRowView(joke: joke)
+                                        .id(joke.id)
+                                }
+                                .listRowSeparator(.hidden)
+                            }
+                            .onDelete(perform: deleteJokes)
+                        }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
                     }
-                    .listStyle(.plain)
                 }
             }
-            .navigationTitle("Jokes")
-            .searchable(text: $searchText, prompt: "Search jokes")
-            .onAppear {
-                checkPendingVoiceMemoImports()
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var combinedToolbarContent: some ToolbarContent {
+        if roastMode {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingAddRoastTarget = true
+                } label: {
+                    Image(systemName: "person.badge.plus")
+                }
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+        } else {
+            ToolbarItem(placement: .navigationBarLeading) {
+                HStack(spacing: 12) {
                     Menu {
                         Button(action: { showingCreateFolder = true }) {
                             Label("New Folder", systemImage: "folder.badge.plus")
                         }
-                        
                         Button(action: { showingAutoOrganize = true }) {
                             Label("Auto-Organize", systemImage: "wand.and.stars")
                         }
-                        
                         Button(action: exportJokesToPDF) {
                             Label("Export to PDF", systemImage: "square.and.arrow.up")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button(action: { showingAddJoke = true }) {
-                            Label("Add Manually", systemImage: "square.and.pencil")
-                        }
-                        
-                        Button(action: { showingTalkToText = true }) {
-                            Label("Talk-to-Text", systemImage: "mic.badge.plus")
-                        }
-                        
-                        Button(action: { showingScanner = true }) {
-                            Label("Scan from Camera", systemImage: "camera")
-                        }
-                        
-                        // Replaced inline PhotosPicker with a button that triggers .photosPicker modifier
-                        Button(action: { showingImagePicker = true }) {
-                            Label("Import Photos", systemImage: "photo.on.rectangle")
-                        }
-                        
-                        Button(action: { showingAudioImport = true }) {
-                            Label("Import Voice Memos", systemImage: "waveform")
-                        }
-                        
-                        Button(action: { showingFilePicker = true }) {
-                            Label("Import Files", systemImage: "doc")
+                    
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            viewMode = viewMode == .grid ? .list : .grid
                         }
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: viewMode.icon)
+                            .foregroundColor(AppTheme.Colors.jokesAccent)
                     }
                 }
             }
-            // Present Photos picker via iOS 17 API
-            .photosPicker(isPresented: $showingImagePicker, selection: $selectedPhotos, matching: .images, preferredItemEncoding: .automatic)
-            .onChange(of: selectedPhotos) { oldValue, newValue in
-                Task {
-                    await processSelectedPhotos(newValue)
-                }
-            }
-            .sheet(isPresented: $showingAddJoke) {
-                AddJokeView(selectedFolder: selectedFolder)
-            }
-            .sheet(isPresented: $showingScanner) {
-                DocumentScannerView { images in
-                    processScannedImages(images)
-                }
-            }
-            .sheet(isPresented: $showingCreateFolder) {
-                CreateFolderView()
-            }
-            .sheet(isPresented: $showingAutoOrganize) {
-                AutoOrganizeView()
-            }
-            .sheet(isPresented: $showingAudioImport) {
-                AudioImportView(selectedFolder: selectedFolder)
-            }
-            .sheet(isPresented: $showingTalkToText) {
-                TalkToTextView(selectedFolder: selectedFolder)
-            }
-            .sheet(isPresented: $showingFilePicker) {
-                DocumentPickerView { urls in
-                    processDocuments(urls)
-                }
-            }
-            .alert("PDF Exported", isPresented: $showingExportAlert) {
-                if let url = exportedPDFURL {
-                    Button("Share") {
-                        shareFile(url)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: { showingAddJoke = true }) {
+                        Label("Add Manually", systemImage: "square.and.pencil")
                     }
-                }
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("Your jokes have been exported to a PDF file.")
-            }
-            .alert("Import Complete", isPresented: $showingImportSummary) {
-                Button("OK") {}
-            } message: {
-                Text("Imported \(importSummary.added) jokes. Skipped \(importSummary.skipped).")
-            }
-            .alert("Delete Folder?", isPresented: $showingDeleteFolderAlert) {
-                Button("Move Jokes…") {
-                    showingMoveJokesSheet = true
-                }
-                Button("Remove From Folder", role: .destructive) {
-                    if let folder = folderPendingDeletion {
-                        removeJokesFromFolderAndDelete(folder)
+                    Button(action: { showingTalkToText = true }) {
+                        Label("Talk-to-Text", systemImage: "mic.badge.plus")
                     }
-                }
-                Button("Cancel", role: .cancel) {
-                    folderPendingDeletion = nil
-                }
-            } message: {
-                let count = folderPendingDeletion.map { f in jokes.filter { $0.folder?.id == f.id }.count } ?? 0
-                Text("This will delete the folder ‘\(folderPendingDeletion?.name ?? "")’. You can move its \(count) jokes to another folder, or remove them from any folder.")
-            }
-            .sheet(isPresented: $showingMoveJokesSheet) {
-                NavigationStack {
-                    List {
-                        // Option to create an unassigned state
-                        Button(action: {
-                            if let folder = folderPendingDeletion {
-                                moveJokes(from: folder, to: nil)
-                                deleteFolder(folder)
-                            }
-                            showingMoveJokesSheet = false
-                            folderPendingDeletion = nil
-                        }) {
-                            Label("Move to No Folder", systemImage: "tray")
-                        }
-                        
-                        ForEach(folders) { dest in
-                            // Prevent moving into the same folder
-                            if dest.id != folderPendingDeletion?.id {
-                                Button(action: {
-                                    if let source = folderPendingDeletion {
-                                        moveJokes(from: source, to: dest)
-                                        deleteFolder(source)
-                                    }
-                                    showingMoveJokesSheet = false
-                                    folderPendingDeletion = nil
-                                }) {
-                                    Label(dest.name, systemImage: "folder")
-                                }
-                            }
-                        }
+                    Button(action: { showingScanner = true }) {
+                        Label("Scan from Camera", systemImage: "camera")
                     }
-                    .navigationTitle("Move Jokes To…")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") {
-                                showingMoveJokesSheet = false
-                            }
-                        }
+                    Button(action: { showingImagePicker = true }) {
+                        Label("Import Photos", systemImage: "photo.on.rectangle")
                     }
-                }
-            }
-            .sheet(isPresented: $showingReviewSheet) {
-                NavigationStack {
-                    List {
-                        if !possibleDuplicates.isEmpty {
-                            Section("Possible Duplicates") {
-                                ForEach(possibleDuplicates, id: \.self) { dup in
-                                    Label(dup, systemImage: "exclamationmark.triangle")
-                                        .foregroundColor(.orange)
-                                }
-                            }
-                        }
-                        Section("Needs Review") {
-                            ForEach(Array(reviewCandidates.enumerated()), id: \.element.id) { index, cand in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    TextField("Title", text: .constant(cand.suggestedTitle))
-                                        .textFieldStyle(.roundedBorder)
-                                    Text(cand.content)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(6)
-                                }
-                            }
-                        }
+                    Button(action: { showingAudioImport = true }) {
+                        Label("Import Voice Memos", systemImage: "waveform")
                     }
-                    .navigationTitle("Review Imports")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Close") { showingReviewSheet = false }
-                        }
+                    Button(action: { showingFilePicker = true }) {
+                        Label("Import Files", systemImage: "doc")
                     }
-                }
-            }
-            .overlay {
-                if isProcessingImages {
-                    Color.black.opacity(0.4)
-                        .ignoresSafeArea()
-                    ProgressView(processingTotal > 0 ? "Processing \(processingCurrent) of \(processingTotal)…" : "Processing…")
-                        .padding()
-                        .background(Color(UIColor.systemBackground))
-                        .cornerRadius(10)
+                } label: {
+                    Image(systemName: "plus")
                 }
             }
         }
     }
+
+    @ViewBuilder
+    private var importOverlay: some View {
+        if isProcessingImages {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+            ImportProgressCard(
+                importFileCount: importFileCount,
+                importFileIndex: importFileIndex,
+                importStatusMessage: importStatusMessage,
+                importedJokeNames: importedJokeNames
+            )
+        }
+    }
     
     private func deleteJokes(at offsets: IndexSet) {
+        let snapshot = filteredJokes
         for index in offsets {
-            modelContext.delete(filteredJokes[index])
+            guard index < snapshot.count else { continue }
+            modelContext.delete(snapshot[index])
         }
     }
     
@@ -408,210 +562,432 @@ struct JokesView: View {
     
     private func processScannedImages(_ images: [UIImage]) {
         isProcessingImages = true
+        importedJokeNames = []
+        importStatusMessage = "Scanning \(images.count) image\(images.count == 1 ? "" : "s")..."
+        importFileCount = images.count
+        importFileIndex = 0
+        
         Task {
+            let extractionService = BitBuddyService.shared
+            
             for image in images {
+                await MainActor.run {
+                    importFileIndex += 1
+                    importStatusMessage = "Scanning image \(importFileIndex)/\(importFileCount)..."
+                }
+                
                 do {
                     let text = try await TextRecognitionService.recognizeText(from: image)
-                    var extractedJokes = TextRecognitionService.extractJokes(from: text)
-                    // Filter out incomplete or invalid jokes
-                    extractedJokes = TextRecognitionService.filterValidJokes(extractedJokes)
                     
                     await MainActor.run {
-                        for jokeText in extractedJokes {
-                            let (title, isValid) = TextRecognitionService.generateTitleFromJoke(jokeText)
-                            // Only create joke if it's valid and has a proper title
-                            if isValid && !title.isEmpty {
-                                let joke = Joke(content: jokeText, title: title, folder: selectedFolder)
-                                modelContext.insert(joke)
-                                print("✅ SCANNER: Added joke with title: \(title.prefix(40))...")
-                            }
+                        importStatusMessage = "🤖 AI extracting jokes..."
+                    }
+                    
+                    let extractedJokes = try await extractionService.extractJokes(from: text)
+                    
+                    await MainActor.run {
+                        importStatusMessage = "Found \(extractedJokes.count) jokes, adding..."
+                    }
+                    
+                    for jokeText in extractedJokes {
+                        let trimmed = jokeText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard trimmed.count >= 3 else { continue }
+                        let title = String(trimmed.prefix(60))
+                        
+                        await MainActor.run {
+                            let joke = Joke(content: trimmed, title: title, folder: self.selectedFolder)
+                            self.modelContext.insert(joke)
+                            try? self.modelContext.save()
+                            self.importedJokeNames.append(title)
+                            self.importStatusMessage = "Added \(self.importedJokeNames.count) jokes..."
+                        }
+                        
+                        // Background categorization
+                        let content = trimmed
+                        Task.detached {
+                            do {
+                                let analysis = try await BitBuddyService.shared.analyzeJoke(content)
+                                await MainActor.run {
+                                    if let joke = self.jokes.first(where: { $0.content == content }) {
+                                        joke.category = analysis.category
+                                        joke.tags = analysis.tags
+                                        joke.difficulty = analysis.difficulty
+                                        joke.humorRating = analysis.humorRating
+                                        
+                                        var folder = self.folders.first(where: { $0.name == analysis.category })
+                                        if folder == nil {
+                                            folder = JokeFolder(name: analysis.category)
+                                            self.modelContext.insert(folder!)
+                                        }
+                                        joke.folder = folder
+                                        try? self.modelContext.save()
+                                    }
+                                }
+                            } catch { }
                         }
                     }
                 } catch {
-                    print("Error recognizing text: \(error)")
+                    print("❌ SCANNER: Error: \(error)")
                 }
             }
             await MainActor.run {
                 isProcessingImages = false
+                importStatusMessage = ""
+                importedJokeNames = []
+                importFileCount = 0
+                importFileIndex = 0
             }
         }
     }
     
     private func processSelectedPhotos(_ items: [PhotosPickerItem]) async {
         isProcessingImages = true
-        processingTotal = items.count
-        processingCurrent = 0
+        importedJokeNames = []
+        importStatusMessage = "Loading \(items.count) photo\(items.count == 1 ? "" : "s")..."
+        importFileCount = items.count
+        importFileIndex = 0
         var added = 0
         var skipped = 0
-        var candidates: [JokeImportCandidate] = []
         var duplicates: [String] = []
+        let extractionService = BitBuddyService.shared
+        
         for item in items {
+            await MainActor.run {
+                importFileIndex += 1
+                importStatusMessage = "Scanning photo \(importFileIndex)/\(importFileCount)..."
+            }
+            
             if let data = try? await item.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
                 do {
                     let text = try await TextRecognitionService.recognizeText(from: image)
-                    var extractedJokes = TextRecognitionService.extractJokes(from: text)
-                    // Filter out incomplete or invalid jokes
-                    extractedJokes = TextRecognitionService.filterValidJokes(extractedJokes)
                     
                     await MainActor.run {
-                        for jokeText in extractedJokes {
-                            let (title, isValid) = TextRecognitionService.generateTitleFromJoke(jokeText)
-                            if isValid && !title.isEmpty {
-                                if isLikelyDuplicate(jokeText, title: title) {
-                                    duplicates.append("\(title) — duplicate suspected")
-                                    skipped += 1
-                                } else {
-                                    let joke = Joke(content: jokeText, title: title, folder: selectedFolder)
-                                    modelContext.insert(joke)
-                                    added += 1
-                                    print("✅ PHOTOS: Added joke with title: \(title.prefix(40))...")
-                                }
-                            } else {
-                                // Borderline candidate for review
-                                let candidate = JokeImportCandidate(
-                                    content: jokeText,
-                                    suggestedTitle: String(jokeText.prefix(50)),
-                                    isComplete: TextRecognitionService.isCompleteJoke(jokeText),
-                                    confidence: Double(TextRecognitionService.countSentences(jokeText)) / 3.0,
-                                    issues: ["Needs review"],
-                                    suggestedFix: nil
-                                )
-                                candidates.append(candidate)
-                                skipped += 1
+                        importStatusMessage = "🤖 AI extracting jokes..."
+                    }
+                    
+                    let extractedJokes = try await extractionService.extractJokes(from: text)
+                    
+                    for jokeText in extractedJokes {
+                        let trimmed = jokeText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard trimmed.count >= 3 else { continue }
+                        let title = String(trimmed.prefix(60))
+                        
+                        if isLikelyDuplicate(trimmed, title: title) {
+                            duplicates.append("\(title) — duplicate")
+                            skipped += 1
+                        } else {
+                            await MainActor.run {
+                                let joke = Joke(content: trimmed, title: title, folder: self.selectedFolder)
+                                self.modelContext.insert(joke)
+                                try? self.modelContext.save()
+                                self.importedJokeNames.append(title)
+                                self.importStatusMessage = "Added \(self.importedJokeNames.count) jokes..."
+                            }
+                            added += 1
+                            
+                            // Background categorization
+                            let content = trimmed
+                            Task.detached {
+                                do {
+                                    let analysis = try await BitBuddyService.shared.analyzeJoke(content)
+                                    await MainActor.run {
+                                        if let joke = self.jokes.first(where: { $0.content == content }) {
+                                            joke.category = analysis.category
+                                            joke.tags = analysis.tags
+                                            joke.difficulty = analysis.difficulty
+                                            joke.humorRating = analysis.humorRating
+                                            
+                                            var folder = self.folders.first(where: { $0.name == analysis.category })
+                                            if folder == nil {
+                                                folder = JokeFolder(name: analysis.category)
+                                                self.modelContext.insert(folder!)
+                                            }
+                                            joke.folder = folder
+                                            try? self.modelContext.save()
+                                        }
+                                    }
+                                } catch { }
                             }
                         }
                     }
                 } catch {
-                    print("Error recognizing text: \(error)")
+                    print("❌ PHOTOS: Error: \(error)")
                 }
             }
-            await MainActor.run { processingCurrent += 1 }
         }
         await MainActor.run {
             importSummary = (added, skipped)
             showingImportSummary = true
-            reviewCandidates = candidates
             possibleDuplicates = duplicates
-            if !candidates.isEmpty { showingReviewSheet = true }
             selectedPhotos = []
             isProcessingImages = false
+            importStatusMessage = ""
+            importedJokeNames = []
+            importFileCount = 0
+            importFileIndex = 0
         }
     }
     
     private func processDocuments(_ urls: [URL]) {
+        print("📂📂📂 IMPORT START: \(urls.count) files selected")
         isProcessingImages = true
+        importedJokeNames = []
+        importStatusMessage = "Starting import..."
+        importFileCount = urls.count
+        importFileIndex = 0
+        
         Task {
             var totalAdded = 0
             var skipped = 0
-            var candidates: [JokeImportCandidate] = []
             var duplicates: [String] = []
+            
             for url in urls {
-                // Files picked with asCopy: true are already inside sandbox; no need for security-scoped access.
-                let fileExists = FileManager.default.fileExists(atPath: url.path)
-                if !fileExists {
-                    print("❌ DOCS: File not found: \(url.path)")
+                await MainActor.run {
+                    importFileIndex += 1
+                    importStatusMessage = "Reading \(url.lastPathComponent)..."
+                }
+                
+                print("📂 IMPORT: Processing \(url.lastPathComponent)")
+                
+                // Step 1: Read raw text from file
+                let rawText = await readTextFromFile(url: url)
+                
+                guard let text = rawText, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    await MainActor.run {
+                        importStatusMessage = "No text found in \(url.lastPathComponent)"
+                    }
+                    print("⚠️ IMPORT: No text from \(url.lastPathComponent)")
                     continue
                 }
-                let ext = url.pathExtension.lowercased()
-                if ext == "pdf" {
-                    await processPDF(url: url) { jokes in
-                        await MainActor.run {
-                            let filteredJokes = TextRecognitionService.filterValidJokes(jokes)
-                            for jokeText in filteredJokes {
-                                let (title, isValid) = TextRecognitionService.generateTitleFromJoke(jokeText)
-                                if isValid && !title.isEmpty {
-                                    if isLikelyDuplicate(jokeText, title: title) {
-                                        duplicates.append("\(title) — duplicate suspected")
-                                        skipped += 1
-                                    } else {
-                                        let joke = Joke(content: jokeText, title: title, folder: selectedFolder)
-                                        modelContext.insert(joke)
-                                        totalAdded += 1
-                                        print("✅ PDF: Added joke with title: \(title.prefix(40))...")
-                                    }
-                                } else {
-                                    let candidate = JokeImportCandidate(
-                                        content: jokeText,
-                                        suggestedTitle: String(jokeText.prefix(50)),
-                                        isComplete: TextRecognitionService.isCompleteJoke(jokeText),
-                                        confidence: Double(TextRecognitionService.countSentences(jokeText)) / 3.0,
-                                        issues: ["Needs review"],
-                                        suggestedFix: nil
-                                    )
-                                    candidates.append(candidate)
-                                    skipped += 1
-                                }
-                            }
-                        }
+                
+                print("📂 IMPORT: Got \(text.count) chars from \(url.lastPathComponent)")
+                
+                await MainActor.run {
+                    importStatusMessage = "🤖 AI extracting jokes..."
+                }
+                
+                // Step 2: Split into jokes — try AI first, fall back to basic
+                var jokes: [String] = []
+                do {
+                    jokes = try await BitBuddyService.shared.extractJokes(from: text)
+                    print("🤖 IMPORT: AI extracted \(jokes.count) jokes")
+                    await MainActor.run {
+                        importStatusMessage = "AI found \(jokes.count) jokes!"
                     }
-                } else {
-                    // Load as image via Data for broader format support (JPEG/PNG/HEIC)
-                    if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
+                } catch {
+                    print("⚠️ IMPORT: AI failed (\(error.localizedDescription)), using basic split")
+                    await MainActor.run {
+                        importStatusMessage = "Splitting jokes..."
+                    }
+                }
+                
+                if jokes.isEmpty {
+                    jokes = basicSplitJokes(from: text)
+                    print("📝 IMPORT: Basic split got \(jokes.count) jokes")
+                    await MainActor.run {
+                        importStatusMessage = "Found \(jokes.count) jokes"
+                    }
+                }
+                
+                if jokes.isEmpty {
+                    jokes = [text.trimmingCharacters(in: .whitespacesAndNewlines)]
+                    print("📝 IMPORT: Using entire text as one joke")
+                }
+                
+                await MainActor.run {
+                    importStatusMessage = "Adding \(jokes.count) jokes..."
+                }
+                
+                // Step 3: Add each joke to the database
+                for jokeText in jokes {
+                    let trimmed = jokeText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard trimmed.count >= 3 else { continue }
+                    
+                    let title = String(trimmed.prefix(60))
+                    
+                    if isLikelyDuplicate(trimmed, title: title) {
+                        duplicates.append("\(title) — duplicate")
+                        skipped += 1
+                        continue
+                    }
+                    
+                    await MainActor.run {
+                        let joke = Joke(content: trimmed, title: title, folder: self.selectedFolder)
+                        self.modelContext.insert(joke)
+                        try? self.modelContext.save()
+                        self.importedJokeNames.append(title)
+                        self.importStatusMessage = "Added \(self.importedJokeNames.count) jokes..."
+                    }
+                    totalAdded += 1
+                    print("✅ IMPORT: Added joke #\(totalAdded): \(title.prefix(40))...")
+                    
+                    // Background categorization — fire and forget
+                    let content = trimmed
+                    Task.detached {
                         do {
-                            let text = try await TextRecognitionService.recognizeText(from: image)
-                            var extractedJokes = TextRecognitionService.extractJokes(from: text)
-                            // Filter out incomplete or invalid jokes
-                            extractedJokes = TextRecognitionService.filterValidJokes(extractedJokes)
+                            let analysis = try await BitBuddyService.shared.analyzeJoke(content)
                             await MainActor.run {
-                                for jokeText in extractedJokes {
-                                    let (title, isValid) = TextRecognitionService.generateTitleFromJoke(jokeText)
-                                    if isValid && !title.isEmpty {
-                                        if isLikelyDuplicate(jokeText, title: title) {
-                                            duplicates.append("\(title) — duplicate suspected")
-                                            skipped += 1
-                                        } else {
-                                            let joke = Joke(content: jokeText, title: title, folder: selectedFolder)
-                                            modelContext.insert(joke)
-                                            totalAdded += 1
-                                            print("✅ IMAGE: Added joke with title: \(title.prefix(40))...")
-                                        }
-                                    } else {
-                                        let candidate = JokeImportCandidate(
-                                            content: jokeText,
-                                            suggestedTitle: String(jokeText.prefix(50)),
-                                            isComplete: TextRecognitionService.isCompleteJoke(jokeText),
-                                            confidence: Double(TextRecognitionService.countSentences(jokeText)) / 3.0,
-                                            issues: ["Needs review"],
-                                            suggestedFix: nil
-                                        )
-                                        candidates.append(candidate)
-                                        skipped += 1
+                                if let joke = self.jokes.first(where: { $0.content == content }) {
+                                    joke.category = analysis.category
+                                    joke.tags = analysis.tags
+                                    joke.difficulty = analysis.difficulty
+                                    joke.humorRating = analysis.humorRating
+                                    
+                                    var folder = self.folders.first(where: { $0.name == analysis.category })
+                                    if folder == nil {
+                                        folder = JokeFolder(name: analysis.category)
+                                        self.modelContext.insert(folder!)
                                     }
+                                    joke.folder = folder
+                                    try? self.modelContext.save()
                                 }
                             }
-                        } catch {
-                            print("❌ DOCS: OCR failed for image \(url.lastPathComponent): \(error)")
-                        }
-                    } else {
-                        print("❌ DOCS: Could not decode image from \(url.lastPathComponent)")
+                        } catch { }
                     }
                 }
             }
+            
             await MainActor.run {
-                isProcessingImages = false
-                importSummary = (totalAdded, skipped)
-                showingImportSummary = true
-                reviewCandidates = candidates
-                possibleDuplicates = duplicates
-                if !candidates.isEmpty { showingReviewSheet = true }
-                print("🏁 DOCS: Finished. Total jokes added: \(totalAdded)")
+                self.importStatusMessage = ""
+                self.isProcessingImages = false
+                self.importSummary = (totalAdded, skipped)
+                self.showingImportSummary = true
+                self.possibleDuplicates = duplicates
+                self.importedJokeNames = []
+                self.importFileCount = 0
+                self.importFileIndex = 0
+                print("🏁 IMPORT DONE: Added \(totalAdded), skipped \(skipped)")
             }
         }
     }
-
-    // Stream PDF pages one-by-one to avoid memory spikes; return jokes incrementally
-    private func processPDF(url: URL, onPageJokes: @escaping ([String]) async -> Void) async {
+    
+    /// Read text from any file type
+    private func readTextFromFile(url: URL) async -> String? {
+        let ext = url.pathExtension.lowercased()
+        print("📖 READ: \(url.lastPathComponent) ext=\(ext)")
+        
+        // PDF
+        if ext == "pdf" {
+            var allText = ""
+            await processPDFToText(url: url) { pageText in
+                allText += pageText + "\n\n"
+            }
+            if !allText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                print("📖 READ: PDF → \(allText.count) chars")
+                return allText
+            }
+            return nil
+        }
+        
+        // Word docs
+        if ["doc", "docx"].contains(ext) {
+            if let attrStr = try? NSAttributedString(url: url, options: [:], documentAttributes: nil) {
+                print("📖 READ: DOC → \(attrStr.string.count) chars")
+                return attrStr.string
+            }
+            return nil
+        }
+        
+        // Images — OCR
+        if ["jpg", "jpeg", "png", "heic", "heif", "tiff", "bmp", "gif"].contains(ext) {
+            if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
+                let text = try? await TextRecognitionService.recognizeText(from: image)
+                print("📖 READ: IMAGE → \(text?.count ?? 0) chars")
+                return text
+            }
+            return nil
+        }
+        
+        // Everything else — try as plain text
+        if let text = try? String(contentsOf: url, encoding: .utf8), !text.isEmpty {
+            print("📖 READ: TEXT → \(text.count) chars")
+            return text
+        }
+        
+        // Last resort — try reading raw data as ascii
+        if let data = try? Data(contentsOf: url) {
+            if let text = String(data: data, encoding: .ascii), !text.isEmpty {
+                print("📖 READ: ASCII → \(text.count) chars")
+                return text
+            }
+        }
+        
+        print("❌ READ: Could not read \(url.lastPathComponent)")
+        return nil
+    }
+    
+    /// Basic joke splitting when AI is unavailable
+    private func basicSplitJokes(from text: String) -> [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Try splitting by numbered list (1. 2. 3.)
+        let numberedPattern = #"(?:^|\n)\s*\d+[\.\)]\s+"#
+        if let regex = try? NSRegularExpression(pattern: numberedPattern, options: [.anchorsMatchLines]) {
+            let range = NSRange(trimmed.startIndex..., in: trimmed)
+            let matches = regex.matches(in: trimmed, options: [], range: range)
+            if matches.count >= 2 {
+                var jokes: [String] = []
+                var lastEnd = trimmed.startIndex
+                for (i, match) in matches.enumerated() {
+                    if let r = Range(match.range, in: trimmed) {
+                        if i > 0 {
+                            let joke = String(trimmed[lastEnd..<r.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                            if joke.count >= 3 { jokes.append(joke) }
+                        }
+                        lastEnd = r.upperBound
+                    }
+                }
+                let last = String(trimmed[lastEnd...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if last.count >= 3 { jokes.append(last) }
+                if !jokes.isEmpty { return jokes }
+            }
+        }
+        
+        // Try splitting by blank lines
+        let lines = trimmed.components(separatedBy: "\n")
+        var jokes: [String] = []
+        var current = ""
+        for line in lines {
+            let l = line.trimmingCharacters(in: .whitespaces)
+            if l.isEmpty {
+                if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    jokes.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+                    current = ""
+                }
+            } else {
+                current += (current.isEmpty ? "" : "\n") + l
+            }
+        }
+        if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            jokes.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        if jokes.count >= 2 { return jokes }
+        
+        // Try splitting by single newlines
+        let singleLines = lines
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && $0.count >= 3 }
+        if singleLines.count >= 2 { return singleLines }
+        
+        // Return whole text as one joke
+        return trimmed.isEmpty ? [] : [trimmed]
+    }
+    
+    /// Extract text from all PDF pages
+    private func processPDFToText(url: URL, onPageText: @escaping (String) -> Void) async {
         guard let document = CGPDFDocument(url as CFURL) else {
             print("❌ PDF: Failed to load \(url.lastPathComponent)")
             return
         }
+        
         let maxDim: CGFloat = 1800
         let pageCount = document.numberOfPages
         await MainActor.run {
             processingTotal = pageCount
             processingCurrent = 0
         }
+        
         for pageNum in 1...pageCount {
             guard let page = document.page(at: pageNum) else { continue }
             let media = page.getBoxRect(.mediaBox)
@@ -629,8 +1005,8 @@ struct JokesView: View {
             }
             do {
                 let text = try await TextRecognitionService.recognizeText(from: image)
-                let jokes = TextRecognitionService.extractJokes(from: text)
-                await onPageJokes(jokes)
+                onPageText(text)
+                print("📄 PDF: Page \(pageNum)/\(pageCount) → \(text.count) chars")
             } catch {
                 print("❌ PDF: OCR failed on page \(pageNum): \(error)")
             }
@@ -652,6 +1028,12 @@ struct JokesView: View {
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first,
            let rootVC = window.rootViewController {
+            // Required for iPad — set popover source to prevent crash
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = window
+                popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
             rootVC.present(activityVC, animated: true)
         }
     }
@@ -711,37 +1093,27 @@ private extension JokesView {
 
 struct FolderChip: View {
     let name: String
+    var icon: String = "folder.fill"
     let isSelected: Bool
     let action: () -> Void
-    
-    private let activeColor = Color(red: 1.0, green: 0.6, blue: 0.2)
-    
+
+    private let accent = AppTheme.Colors.jokesAccent
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 if isSelected {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                    Image(systemName: icon)
+                        .font(.system(size: 9, weight: .bold))
                 }
                 Text(name)
-                    .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .serif))
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                Capsule()
-                    .fill(
-                        isSelected
-                        ? AnyShapeStyle(LinearGradient(colors: [activeColor, activeColor.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        : AnyShapeStyle(Color(UIColor.secondarySystemBackground))
-                    )
-            )
-            .foregroundColor(isSelected ? .white : .primary)
-            .overlay(
-                Capsule()
-                    .stroke(isSelected ? Color.clear : Color(UIColor.separator).opacity(0.3), lineWidth: 1)
-            )
-            .shadow(color: isSelected ? activeColor.opacity(0.3) : .clear, radius: 6, y: 3)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? Capsule().fill(accent) : Capsule().fill(AppTheme.Colors.paperAged))
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textSecondary)
         }
         .buttonStyle(.plain)
     }
@@ -749,61 +1121,157 @@ struct FolderChip: View {
 
 struct JokeRowView: View {
     let joke: Joke
-    
-    private let accentColor = Color(red: 1.0, green: 0.6, blue: 0.2)
-    
+
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            // Modern icon badge
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [accentColor.opacity(0.15), accentColor.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 46, height: 46)
-                
-                Image(systemName: "face.smiling.fill")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(accentColor)
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .top, spacing: 12) {
+            Text("•")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(AppTheme.Colors.jokesAccent)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(joke.title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold, design: .serif))
+                    .foregroundColor(AppTheme.Colors.inkBlack)
                     .lineLimit(1)
-                
+
                 Text(joke.content)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
                     .lineLimit(2)
-                
-                HStack(spacing: 10) {
+
+                HStack(spacing: 8) {
                     if let folder = joke.folder {
-                        HStack(spacing: 4) {
-                            Image(systemName: "folder.fill")
-                                .font(.system(size: 10))
-                            Text(folder.name)
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .foregroundStyle(accentColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(accentColor.opacity(0.1))
-                        .clipShape(Capsule())
+                        Text(folder.name)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.jokesAccent)
                     }
-                    
                     Spacer()
-                    
-                    Text(joke.dateCreated, format: .dateTime.month(.abbreviated).day())
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
+                    Text(joke.dateCreated.formatted(.dateTime.month(.abbreviated).day()))
+                        .font(.system(size: 10))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+    }
+}
+
+struct RoastTargetCard: View {
+    let target: RoastTarget
+
+    var body: some View {
+        VStack(spacing: 14) {
+            // Avatar
+            Group {
+                if let data = target.photoData, let img = UIImage(data: data) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 58, height: 58)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(AppTheme.Colors.roastAccent.opacity(0.5), lineWidth: 1.5))
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.roastAccent.opacity(0.18))
+                            .frame(width: 58, height: 58)
+                        Text(target.name.prefix(1).uppercased())
+                            .font(.system(size: 24, weight: .bold, design: .serif))
+                            .foregroundColor(AppTheme.Colors.roastAccent)
+                    }
+                }
+            }
+
+            // Name + count
+            VStack(spacing: 3) {
+                Text(target.name)
+                    .font(.system(size: 14, weight: .semibold, design: .serif))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text("\(target.jokeCount) roast\(target.jokeCount == 1 ? "" : "s")")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color.white.opacity(0.45))
+            }
+
+            // Flame meter
+            HStack(spacing: 3) {
+                ForEach(0..<5, id: \.self) { i in
+                    Image(systemName: i < min(target.jokeCount, 5) ? "flame.fill" : "flame")
+                        .font(.system(size: 9))
+                        .foregroundColor(i < min(target.jokeCount, 5) ? AppTheme.Colors.roastAccent : Color.white.opacity(0.20))
                 }
             }
         }
-        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 140)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AppTheme.Colors.roastCard))
+        .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+    }
+}
+
+// MARK: - View Mode
+
+enum JokesViewMode: String, CaseIterable {
+    case list = "List"
+    case grid = "Grid"
+    
+    var icon: String {
+        switch self {
+        case .list: return "list.bullet"
+        case .grid: return "square.grid.2x2"
+        }
+    }
+}
+
+// MARK: - Grid Card View
+
+struct JokeCardView: View {
+    let joke: Joke
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Title
+            Text(joke.title)
+                .font(.system(size: 17, weight: .bold, design: .serif))
+                .foregroundColor(AppTheme.Colors.inkBlack)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            
+            // Content preview
+            Text(joke.content)
+                .font(.system(size: 15))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .lineLimit(5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Spacer(minLength: 0)
+            
+            // Footer
+            HStack(spacing: 8) {
+                if let folder = joke.folder {
+                    HStack(spacing: 4) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 9))
+                        Text(folder.name)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(AppTheme.Colors.jokesAccent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(AppTheme.Colors.jokesAccent.opacity(0.1)))
+                }
+                Spacer()
+                Text(joke.dateCreated.formatted(.dateTime.month(.abbreviated).day()))
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.Colors.textTertiary)
+            }
+        }
+        .padding(16)
+        .frame(minHeight: 180)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AppTheme.Colors.surfaceElevated))
+        .shadow(color: .black.opacity(0.04), radius: 3, y: 1)
     }
 }

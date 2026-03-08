@@ -12,7 +12,8 @@ extension FileManager {
 struct NotebookView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var photos: [NotebookPhotoRecord]
-    
+    @AppStorage("roastModeEnabled") private var roastMode = false
+
     @State private var showingDetail: NotebookPhotoRecord?
     @State private var showingImagePicker = false
     @State private var pickedPhotoItem: PhotosPickerItem?
@@ -39,7 +40,7 @@ struct NotebookView: View {
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color.brown.opacity(0.15), Color.brown.opacity(0.1)],
+                                        colors: [AppTheme.Colors.notebookAccent.opacity(0.15), AppTheme.Colors.notebookAccent.opacity(0.1)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -49,7 +50,7 @@ struct NotebookView: View {
                                 .font(.system(size: 44))
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.brown, .brown.opacity(0.8)],
+                                        colors: [AppTheme.Colors.notebookAccent, AppTheme.Colors.notebookAccent.opacity(0.8)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -89,7 +90,13 @@ struct NotebookView: View {
                     }
                 }
             }
-            .navigationTitle("Notebook Saver")
+            .navigationTitle(roastMode ? "🔥 Fire Notebook" : "Notebook Saver")
+            .toolbarBackground(
+                roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
+                for: .navigationBar
+            )
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     PhotosPicker(selection: $pickedPhotoItem,
@@ -125,6 +132,10 @@ struct NotebookView: View {
             .sheet(item: $showingDetail) { photo in
                 NotebookDetailView(photo: photo)
                     .environment(\.modelContext, modelContext)
+            }
+            .onDisappear {
+                // Clear image cache when leaving to free memory
+                ImageCache.shared.clearCache()
             }
         }
     }

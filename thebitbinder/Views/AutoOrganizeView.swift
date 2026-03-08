@@ -15,11 +15,28 @@ struct AutoOrganizeView: View {
     @Query private var jokes: [Joke]
     @Query private var folders: [JokeFolder]
     
+    private let categorizationService = BitBuddyService.shared
+    @ObservedObject private var usageTracker = FreeUsageTracker.shared
+    
     @State private var categories = AutoOrganizeService.getCategories()
     @State private var showOrganizationSummary = false
     @State private var organizationStats: (organized: Int, suggested: Int) = (0, 0)
     @State private var selectedJoke: Joke?
     @State private var showCategoryDetails = false
+    @State private var isAnalyzing = false
+    @State private var analysisProgress = 0
+    @State private var analysisTotal = 0
+    @State private var errorMessage: String?
+    @State private var showError = false
+    
+    // Folder management state
+    @State private var showFolderSetup = false
+    @State private var customFolders: [String] = []
+    @State private var newFolderName = ""
+    @State private var isGeneratingFolders = false
+    @State private var useCustomFoldersOnly = false
+    
+    // Folder management state
     
     var unorganizedJokes: [Joke] {
         jokes.filter { $0.folder == nil }
@@ -30,37 +47,95 @@ struct AutoOrganizeView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(spacing: 16) {
+                        // AI Usage Banner
+                        AIUsageBanner()
+                            .padding(.top, 8)
+                        
                         // Quick Auto-Organize Button
                         if !unorganizedJokes.isEmpty {
-                            Button(action: performAutoOrganize) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "wand.and.stars")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Smart Auto-Organize")
-                                            .font(.headline)
-                                        Text("AI-powered categorization")
-                                            .font(.caption)
-                                            .foregroundColor(.white.opacity(0.8))
+                            if usageTracker.hasUsesRemaining {
+                                VStack(spacing: 12) {
+                                    // Setup Folders Button
+                                    Button(action: { showFolderSetup = true }) {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "folder.badge.gearshape")
+                                                .font(.system(size: 16, weight: .semibold))
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Setup Folders First")
+                                                    .font(.headline)
+                                                Text("Create folders or let AI suggest them")
+                                                    .font(.caption)
+                                                    .foregroundColor(.white.opacity(0.8))
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 14, weight: .semibold))
+                                        }
                                     }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .semibold))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [.blue.opacity(0.8), .blue.opacity(0.6)]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [.purple.opacity(0.8), .purple.opacity(0.6)]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
-                                )
-                                .cornerRadius(10)
+                                    .cornerRadius(10)
+                                    
+                                    // Auto-Organize Button
+                                    Button(action: performAutoOrganize) {
+                                        if isAnalyzing {
+                                            HStack(spacing: 12) {
+                                                ProgressView()
+                                                    .tint(.white)
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text("Analyzing...")
+                                                        .font(.headline)
+                                                    Text("\(analysisProgress)/\(analysisTotal) jokes analyzed")
+                                                        .font(.caption)
+                                                        .foregroundColor(.white.opacity(0.8))
+                                                }
+                                                Spacer()
+                                            }
+                                        } else {
+                                            HStack(spacing: 12) {
+                                                Image(systemName: "wand.and.stars")
+                                                    .font(.system(size: 16, weight: .semibold))
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text("Smart Auto-Organize")
+                                                        .font(.headline)
+                                                    Text(customFolders.isEmpty ? "AI will create folders" : "Using \(customFolders.count) custom folders")
+                                                        .font(.caption)
+                                                        .foregroundColor(.white.opacity(0.8))
+                                                }
+                                                Spacer()
+                                                Image(systemName: "chevron.right")
+                                                    .font(.system(size: 14, weight: .semibold))
+                                            }
+                                        }
+                                    }
+                                    .disabled(isAnalyzing)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [.blue.opacity(0.8), .blue.opacity(0.6)]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .cornerRadius(10)
+                                }
+                                .padding()
+                            } else {
+                                // No free uses left
+                                AIUsageLockedView(featureName: "auto-organize uses")
                             }
-                            .padding()
                         }
                         
                         // Unorganized Jokes Section
@@ -150,6 +225,61 @@ struct AutoOrganizeView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showOrganizationSummary) {
+                VStack(spacing: 20) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.green)
+                        
+                        Text("Auto-Organization Complete!")
+                            .font(.title2.bold())
+                        
+                        VStack(spacing: 8) {
+                            HStack {
+                                Text("Jokes Organized:")
+                                Spacer()
+                                Text("\(organizationStats.organized)")
+                                    .fontWeight(.semibold)
+                            }
+                            
+                            if organizationStats.suggested > 0 {
+                                HStack {
+                                    Text("Suggested Categories:")
+                                    Spacer()
+                                    Text("\(organizationStats.suggested)")
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                        
+                        Text("Your jokes have been analyzed by Gemini AI and categorized automatically.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: { showOrganizationSummary = false; dismiss() }) {
+                        Text("Done")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                }
+                .padding()
+            }
+            .alert("Analysis Error", isPresented: $showError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage ?? "An unknown error occurred during analysis.")
+            }
             .sheet(isPresented: $showCategoryDetails) {
                 if let joke = selectedJoke {
                     CategorySuggestionDetail(
@@ -161,6 +291,14 @@ struct AutoOrganizeView: View {
                     )
                 }
             }
+            .sheet(isPresented: $showFolderSetup) {
+                FolderSetupView(
+                    customFolders: $customFolders,
+                    useCustomFoldersOnly: $useCustomFoldersOnly,
+                    unorganizedJokes: unorganizedJokes,
+                    existingFolders: folders.map { $0.name }
+                )
+            }
             .alert("Organization Complete", isPresented: $showOrganizationSummary) {
                 Button("Done") { }
             } message: {
@@ -170,15 +308,107 @@ struct AutoOrganizeView: View {
     }
     
     private func performAutoOrganize() {
-        AutoOrganizeService.autoOrganizeJokes(
-            unorganizedJokes: unorganizedJokes,
-            existingFolders: folders,
-            modelContext: modelContext
-        ) { organized, suggested in
-            organizationStats = (organized, suggested)
-            showOrganizationSummary = true
+        isAnalyzing = true
+        analysisTotal = unorganizedJokes.count
+        analysisProgress = 0
+        errorMessage = nil
+        
+        Task {
+            do {
+                print("🎭 Starting analysis of \(unorganizedJokes.count) jokes...")
+                
+                // If user has custom folders, use them; otherwise let AI create
+                let availableFolders = customFolders.isEmpty ? nil : customFolders
+                
+                for joke in unorganizedJokes {
+                    analysisProgress += 1
+                    
+                    // Analyze joke — if custom folders exist, ask AI to pick from them
+                    let analysis: JokeAnalysis
+                    if let folders = availableFolders, useCustomFoldersOnly {
+                        analysis = try await analyzeJokeWithFolders(joke.content, folders: folders)
+                    } else {
+                        analysis = try await categorizationService.analyzeJoke(joke.content)
+                    }
+                    
+                    // Update joke with analysis results
+                    joke.category = analysis.category
+                    joke.tags = analysis.tags
+                    joke.difficulty = analysis.difficulty
+                    joke.humorRating = analysis.humorRating
+                    
+                    // Create or get folder for category
+                    var targetFolder = folders.first(where: { $0.name == analysis.category })
+                    if targetFolder == nil {
+                        targetFolder = JokeFolder(name: analysis.category)
+                        modelContext.insert(targetFolder!)
+                    }
+                    
+                    joke.folder = targetFolder
+                    
+                    print("🎭 Analyzed \(analysisProgress)/\(analysisTotal): \(analysis.category)")
+                }
+                
+                try modelContext.save()
+                
+                await MainActor.run {
+                    organizationStats = (unorganizedJokes.count, 0)
+                    showOrganizationSummary = true
+                    isAnalyzing = false
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showError = true
+                    isAnalyzing = false
+                }
+            }
         }
     }
+    
+    /// Analyze a joke and pick from user-provided folders
+    private func analyzeJokeWithFolders(_ jokeText: String, folders: [String]) async throws -> JokeAnalysis {
+        let folderList = folders.joined(separator: ", ")
+        let prompt = """
+        Analyze this joke and categorize it into ONE of these folders: \(folderList)
+        
+        Pick the BEST matching folder from the list above.
+        
+        Joke: "\(jokeText)"
+        
+        Respond ONLY with valid JSON:
+        {
+          "category": "folder name from list",
+          "tags": ["tag1", "tag2"],
+          "difficulty": "Easy|Medium|Hard",
+          "humorRating": 7
+        }
+        """
+        
+        let response = try await categorizationService.sendMessage(prompt)
+        
+        // Parse the response
+        guard let jsonStart = response.firstIndex(of: "{"),
+              let jsonEnd = response.lastIndex(of: "}") else {
+            throw BitBuddyError.parseError
+        }
+        
+        let jsonString = String(response[jsonStart...jsonEnd])
+        guard let data = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let category = json["category"] as? String,
+              let tags = json["tags"] as? [String],
+              let difficulty = json["difficulty"] as? String,
+              let humorRating = json["humorRating"] as? Int else {
+            throw BitBuddyError.parseError
+        }
+        
+        // Ensure category is from the allowed list
+        let finalCategory = folders.first { $0.lowercased() == category.lowercased() } ?? folders.first ?? category
+        
+        return JokeAnalysis(category: finalCategory, tags: tags, difficulty: difficulty, humorRating: humorRating)
+    }
+    
     
     private func assignJokeToFolder(_ joke: Joke, category: String) {
         var targetFolder = folders.first(where: { $0.name == category })
@@ -492,6 +722,236 @@ struct Wrap<Content: View>: View {
                         let result = height
                         return result
                     }
+            }
+        }
+    }
+}
+
+// MARK: - Folder Setup View
+
+struct FolderSetupView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var customFolders: [String]
+    @Binding var useCustomFoldersOnly: Bool
+    
+    let unorganizedJokes: [Joke]
+    let existingFolders: [String]
+    
+    @State private var newFolderName = ""
+    @State private var isGeneratingFolders = false
+    @State private var suggestedFolders: [String] = []
+    @ObservedObject private var usageTracker = FreeUsageTracker.shared
+    
+    private let bitBuddy = BitBuddyService.shared
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                // AI Generate Section
+                Section {
+                    Button(action: generateAIFolders) {
+                        HStack(spacing: 12) {
+                            if isGeneratingFolders {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "sparkles")
+                                    .foregroundColor(.purple)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Generate Folders with AI")
+                                    .fontWeight(.semibold)
+                                Text("Analyze your jokes and suggest folders")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                    }
+                    .disabled(isGeneratingFolders || !usageTracker.hasUsesRemaining)
+                    
+                    if !suggestedFolders.isEmpty {
+                        ForEach(suggestedFolders, id: \.self) { folder in
+                            HStack {
+                                Image(systemName: "folder.badge.plus")
+                                    .foregroundColor(.purple)
+                                Text(folder)
+                                Spacer()
+                                if customFolders.contains(folder) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                } else {
+                                    Button("Add") {
+                                        if !customFolders.contains(folder) {
+                                            customFolders.append(folder)
+                                        }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                }
+                            }
+                        }
+                        
+                        Button("Add All Suggestions") {
+                            for folder in suggestedFolders {
+                                if !customFolders.contains(folder) {
+                                    customFolders.append(folder)
+                                }
+                            }
+                        }
+                        .foregroundColor(.purple)
+                    }
+                } header: {
+                    Text("AI Suggestions")
+                } footer: {
+                    Text("AI will analyze your \(unorganizedJokes.count) jokes and suggest folder categories.")
+                }
+                
+                // Manual Create Section
+                Section {
+                    HStack {
+                        TextField("New folder name...", text: $newFolderName)
+                        Button(action: addCustomFolder) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.blue)
+                        }
+                        .disabled(newFolderName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                } header: {
+                    Text("Create Your Own")
+                }
+                
+                // Custom Folders List
+                if !customFolders.isEmpty {
+                    Section {
+                        ForEach(customFolders, id: \.self) { folder in
+                            HStack {
+                                Image(systemName: "folder.fill")
+                                    .foregroundColor(.blue)
+                                Text(folder)
+                                Spacer()
+                            }
+                        }
+                        .onDelete(perform: deleteFolder)
+                    } header: {
+                        Text("Your Folders (\(customFolders.count))")
+                    }
+                }
+                
+                // Existing Folders
+                if !existingFolders.isEmpty {
+                    Section {
+                        ForEach(existingFolders, id: \.self) { folder in
+                            HStack {
+                                Image(systemName: "folder")
+                                    .foregroundColor(.gray)
+                                Text(folder)
+                                Spacer()
+                                if customFolders.contains(folder) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                } else {
+                                    Button("Use") {
+                                        if !customFolders.contains(folder) {
+                                            customFolders.append(folder)
+                                        }
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Existing Folders")
+                    } footer: {
+                        Text("Add existing folders to use them for organization.")
+                    }
+                }
+                
+                // Options
+                Section {
+                    Toggle("Only use my folders", isOn: $useCustomFoldersOnly)
+                } header: {
+                    Text("Options")
+                } footer: {
+                    Text(useCustomFoldersOnly 
+                         ? "AI will only categorize into your selected folders."
+                         : "AI may create new folders if jokes don't fit existing ones.")
+                }
+            }
+            .navigationTitle("Setup Folders")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+    
+    private func addCustomFolder() {
+        let name = newFolderName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !customFolders.contains(name) else { return }
+        customFolders.append(name)
+        newFolderName = ""
+    }
+    
+    private func deleteFolder(at offsets: IndexSet) {
+        customFolders.remove(atOffsets: offsets)
+    }
+    
+    private func generateAIFolders() {
+        isGeneratingFolders = true
+        
+        Task {
+            do {
+                // Use free usage
+                try FreeUsageTracker.shared.consumeUse(for: .jokeAnalysis)
+                
+                // Sample some jokes for analysis (don't send all to save tokens)
+                let sampleJokes = Array(unorganizedJokes.prefix(10))
+                let jokeTexts = sampleJokes.map { "- \($0.content.prefix(100))" }.joined(separator: "\n")
+                
+                let prompt = """
+                I have these comedy jokes that need organizing into folders. 
+                Analyze them and suggest 4-6 folder category names that would work well.
+                
+                Sample jokes:
+                \(jokeTexts)
+                
+                Return ONLY a JSON array of folder names, nothing else:
+                ["Folder1", "Folder2", "Folder3"]
+                """
+                
+                let response = try await bitBuddy.sendMessage(prompt)
+                
+                // Parse response
+                if let jsonStart = response.firstIndex(of: "["),
+                   let jsonEnd = response.lastIndex(of: "]") {
+                    let jsonString = String(response[jsonStart...jsonEnd])
+                    if let data = jsonString.data(using: .utf8),
+                       let folders = try? JSONSerialization.jsonObject(with: data) as? [String] {
+                        await MainActor.run {
+                            suggestedFolders = folders.filter { !$0.isEmpty }
+                            isGeneratingFolders = false
+                        }
+                        return
+                    }
+                }
+                
+                await MainActor.run {
+                    isGeneratingFolders = false
+                }
+            } catch {
+                await MainActor.run {
+                    isGeneratingFolders = false
+                }
+                print("❌ AI folder generation error: \(error)")
             }
         }
     }

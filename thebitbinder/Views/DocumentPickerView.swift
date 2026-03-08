@@ -12,7 +12,16 @@ struct DocumentPickerView: UIViewControllerRepresentable {
     let completion: ([URL]) -> Void
     
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.image, .pdf, .text], asCopy: true)
+        let types: [UTType] = [
+            .image, .pdf, .text, .plainText, .utf8PlainText,
+            .rtf, .rtfd,
+            UTType(filenameExtension: "doc") ?? .text,
+            UTType(filenameExtension: "docx") ?? .text,
+            UTType(filenameExtension: "md") ?? .text,
+            UTType(filenameExtension: "txt") ?? .text,
+            .data  // fallback to accept any file
+        ]
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
         picker.allowsMultipleSelection = true
         picker.delegate = context.coordinator
         return picker
@@ -32,6 +41,7 @@ struct DocumentPickerView: UIViewControllerRepresentable {
         }
         
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            print("📂 PICKER: User selected \(urls.count) files: \(urls.map { $0.lastPathComponent })")
             completion(urls)
         }
     }

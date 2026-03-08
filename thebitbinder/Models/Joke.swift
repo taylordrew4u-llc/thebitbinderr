@@ -31,6 +31,15 @@ final class Joke {
     var comedicTone: String?
     var structureScore: Double = 0.0
     
+    // Gemini AI categorization
+    var category: String?  // Primary category from Gemini
+    var tags: [String] = []  // AI-suggested tags
+    var difficulty: String?  // Easy, Medium, Hard
+    var humorRating: Int = 0  // 1-10 rating
+    
+    // The Hits - perfected jokes that work every time
+    var isHit: Bool = false
+    
     // Computed property for allCategories
     var allCategories: [String] {
         get {

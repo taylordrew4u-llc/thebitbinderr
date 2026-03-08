@@ -11,6 +11,7 @@ import SwiftData
 struct SetListsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var setLists: [SetList]
+    @AppStorage("roastModeEnabled") private var roastMode = false
     
     @State private var showingCreateSetList = false
     @State private var searchText = ""
@@ -33,7 +34,7 @@ struct SetListsView: View {
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color.purple.opacity(0.12), Color.purple.opacity(0.08)],
+                                        colors: [AppTheme.Colors.setsAccent.opacity(0.12), AppTheme.Colors.setsAccent.opacity(0.08)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -43,7 +44,7 @@ struct SetListsView: View {
                                 .font(.system(size: 44))
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.purple, .purple.opacity(0.8)],
+                                        colors: [AppTheme.Colors.setsAccent, AppTheme.Colors.setsAccent.opacity(0.8)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -74,15 +75,22 @@ struct SetListsView: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Set Lists")
+            .navigationTitle(roastMode ? "🔥 Roast Sets" : "Set Lists")
             .navigationDestination(for: SetList.self) { setList in
                 SetListDetailView(setList: setList)
             }
-            .searchable(text: $searchText, prompt: "Search set lists")
+            .searchable(text: $searchText, prompt: roastMode ? "Search roast sets" : "Search set lists")
+            .toolbarBackground(
+                roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
+                for: .navigationBar
+            )
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingCreateSetList = true }) {
                         Image(systemName: "plus")
+                            .foregroundColor(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
                     }
                 }
             }
@@ -101,53 +109,34 @@ struct SetListsView: View {
 
 struct SetListRowView: View {
     let setList: SetList
-    
-    private let accentColor = Color(red: 0.7, green: 0.4, blue: 1.0)
-    
+    @AppStorage("roastModeEnabled") private var roastMode = false
+    private let accent = AppTheme.Colors.setsAccent
+
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [accentColor.opacity(0.15), accentColor.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 46, height: 46)
-                
-                Image(systemName: "list.bullet.rectangle.fill")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(accentColor)
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .top, spacing: 0) {
+            Text("•")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(accent)
+                .frame(width: 32, alignment: .center)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(setList.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold, design: .serif))
+                    .foregroundColor(roastMode ? .white : AppTheme.Colors.inkBlack)
                     .lineLimit(1)
-                
-                HStack(spacing: 14) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "face.smiling")
-                            .font(.system(size: 11))
-                        Text("\(setList.jokeIDs.count) jokes")
-                            .font(.system(size: 13))
-                    }
-                    .foregroundStyle(accentColor.opacity(0.9))
-                    
-                    Text(setList.dateModified, format: .dateTime.month(.abbreviated).day())
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
+
+                HStack(spacing: 10) {
+                    Label("\(setList.jokeIDs.count) jokes", systemImage: "text.quote")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(accent.opacity(0.85))
+                    Spacer()
+                    Text(setList.dateModified.formatted(.dateTime.month(.abbreviated).day()))
+                        .font(.system(size: 11))
+                        .foregroundColor(roastMode ? Color.white.opacity(0.45) : AppTheme.Colors.textTertiary)
                 }
             }
-            
-            Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.quaternary)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
     }
 }

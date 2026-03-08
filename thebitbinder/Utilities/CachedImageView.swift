@@ -4,14 +4,42 @@ import UIKit
 final class ImageCache {
     static let shared = ImageCache()
     private let cache = NSCache<NSString, UIImage>()
+    
     private init() {
-        cache.totalCostLimit = 50 * 1024 * 1024 // 50MB
+        // Reduced cache limit to 20MB to prevent memory pressure
+        cache.totalCostLimit = 20 * 1024 * 1024
+        cache.countLimit = 50 // Max 50 images
+        
+        // Clear cache on memory warning
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.clearCache()
+        }
+        
+        // Clear cache when app enters background
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.clearCache()
+        }
     }
+    
     func image(forKey key: String) -> UIImage? {
         cache.object(forKey: key as NSString)
     }
+    
     func set(_ image: UIImage, forKey key: String, cost: Int = 0) {
         cache.setObject(image, forKey: key as NSString, cost: cost)
+    }
+    
+    func clearCache() {
+        cache.removeAllObjects()
+        print("🧹 ImageCache cleared due to memory pressure")
     }
 }
 
@@ -60,7 +88,7 @@ struct CachedImageView: View {
                 if let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
                    let img = UIImage(data: data) {
                     // downscale large images for grid
-                    let maxDim: CGFloat = 512
+                    let maxDim: CGFloat = 256 // Reduced for memory
                     let scaled = downscale(image: img, maxDimension: maxDim)
                     ImageCache.shared.set(scaled, forKey: cacheKey, cost: Int(scaled.pngData()?.count ?? 0))
                     return scaled

@@ -1,0 +1,304 @@
+//
+//  JokesViewModifiers.swift
+//  thebitbinder
+//
+//  Extracted sheet & alert modifiers from JokesView to reduce
+//  body complexity and avoid compiler type-check timeouts.
+//
+
+import SwiftUI
+import SwiftData
+import UIKit
+
+// MARK: - Sheets Modifier
+
+struct JokesSheetsModifier: ViewModifier {
+    @Binding var showingAddJoke: Bool
+    @Binding var showingScanner: Bool
+    @Binding var showingCreateFolder: Bool
+    @Binding var showingAutoOrganize: Bool
+    @Binding var showingAudioImport: Bool
+    @Binding var showingTalkToText: Bool
+    @Binding var showingFilePicker: Bool
+    @Binding var showingAddRoastTarget: Bool
+    @Binding var showingMoveJokesSheet: Bool
+    @Binding var showingReviewSheet: Bool
+
+    let selectedFolder: JokeFolder?
+    let folders: [JokeFolder]
+    @Binding var folderPendingDeletion: JokeFolder?
+    let reviewCandidates: [JokeImportCandidate]
+    let possibleDuplicates: [String]
+    let processScannedImages: ([UIImage]) -> Void
+    let processDocuments: ([URL]) -> Void
+    let moveJokes: (JokeFolder, JokeFolder?) -> Void
+    let deleteFolder: (JokeFolder) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: $showingAddJoke) {
+                AddJokeView(selectedFolder: selectedFolder)
+            }
+            .sheet(isPresented: $showingScanner) {
+                DocumentScannerView { images in
+                    processScannedImages(images)
+                }
+            }
+            .sheet(isPresented: $showingCreateFolder) {
+                CreateFolderView()
+            }
+            .sheet(isPresented: $showingAutoOrganize) {
+                AutoOrganizeView()
+            }
+            .sheet(isPresented: $showingAudioImport) {
+                AudioImportView(selectedFolder: selectedFolder)
+            }
+            .sheet(isPresented: $showingTalkToText) {
+                TalkToTextView(selectedFolder: selectedFolder)
+            }
+            .sheet(isPresented: $showingFilePicker) {
+                DocumentPickerView { urls in
+                    processDocuments(urls)
+                }
+            }
+            .sheet(isPresented: $showingAddRoastTarget) {
+                AddRoastTargetView()
+            }
+            .sheet(isPresented: $showingMoveJokesSheet) {
+                MoveJokesSheet(
+                    folders: folders,
+                    folderPendingDeletion: $folderPendingDeletion,
+                    showingMoveJokesSheet: $showingMoveJokesSheet,
+                    moveJokes: moveJokes,
+                    deleteFolder: deleteFolder
+                )
+            }
+            .sheet(isPresented: $showingReviewSheet) {
+                ReviewImportsSheet(
+                    showingReviewSheet: $showingReviewSheet,
+                    reviewCandidates: reviewCandidates,
+                    possibleDuplicates: possibleDuplicates
+                )
+            }
+    }
+}
+
+// MARK: - Alerts Modifier
+
+struct JokesAlertsModifier: ViewModifier {
+    @Binding var showingExportAlert: Bool
+    @Binding var showingImportSummary: Bool
+    @Binding var showingDeleteFolderAlert: Bool
+    @Binding var showingDeleteRoastAlert: Bool
+    @Binding var showingMoveJokesSheet: Bool
+
+    let exportedPDFURL: URL?
+    let importSummary: (added: Int, skipped: Int)
+    @Binding var folderPendingDeletion: JokeFolder?
+    @Binding var roastTargetToDelete: RoastTarget?
+    let jokes: [Joke]
+    let shareFile: (URL) -> Void
+    let removeJokesFromFolderAndDelete: (JokeFolder) -> Void
+    let modelContext: ModelContext
+
+    func body(content: Content) -> some View {
+        content
+            .alert("PDF Exported", isPresented: $showingExportAlert) {
+                if let url = exportedPDFURL {
+                    Button("Share") { shareFile(url) }
+                }
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Your jokes have been exported to a PDF file.")
+            }
+            .alert("Import Complete", isPresented: $showingImportSummary) {
+                Button("OK") {}
+            } message: {
+                Text("Imported \(importSummary.added) jokes. Skipped \(importSummary.skipped).")
+            }
+            .alert("Delete Folder?", isPresented: $showingDeleteFolderAlert) {
+                Button("Move Jokes…") {
+                    showingMoveJokesSheet = true
+                }
+                Button("Remove From Folder", role: .destructive) {
+                    if let folder = folderPendingDeletion {
+                        removeJokesFromFolderAndDelete(folder)
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    folderPendingDeletion = nil
+                }
+            } message: {
+                let count = folderPendingDeletion.map { f in jokes.filter { $0.folder?.id == f.id }.count } ?? 0
+                Text("This will delete the folder '\(folderPendingDeletion?.name ?? "")'. You can move its \(count) jokes to another folder, or remove them from any folder.")
+            }
+            .alert("Delete Roast Target?", isPresented: $showingDeleteRoastAlert) {
+                Button("Delete", role: .destructive) {
+                    if let target = roastTargetToDelete {
+                        modelContext.delete(target)
+                        try? modelContext.save()
+                        roastTargetToDelete = nil
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    roastTargetToDelete = nil
+                }
+            } message: {
+                Text("This will delete \(roastTargetToDelete?.name ?? "") and all their roast jokes permanently.")
+            }
+    }
+}
+
+// MARK: - Move Jokes Sheet (extracted)
+
+struct MoveJokesSheet: View {
+    let folders: [JokeFolder]
+    @Binding var folderPendingDeletion: JokeFolder?
+    @Binding var showingMoveJokesSheet: Bool
+    let moveJokes: (JokeFolder, JokeFolder?) -> Void
+    let deleteFolder: (JokeFolder) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Button(action: {
+                    if let folder = folderPendingDeletion {
+                        moveJokes(folder, nil)
+                        deleteFolder(folder)
+                    }
+                    showingMoveJokesSheet = false
+                    folderPendingDeletion = nil
+                }) {
+                    Label("Move to No Folder", systemImage: "tray")
+                }
+                ForEach(folders) { dest in
+                    if dest.id != folderPendingDeletion?.id {
+                        Button(action: {
+                            if let source = folderPendingDeletion {
+                                moveJokes(source, dest)
+                                deleteFolder(source)
+                            }
+                            showingMoveJokesSheet = false
+                            folderPendingDeletion = nil
+                        }) {
+                            Label(dest.name, systemImage: "folder")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Move Jokes To…")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showingMoveJokesSheet = false }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Import Progress Card (extracted from overlay)
+
+struct ImportProgressCard: View {
+    let importFileCount: Int
+    let importFileIndex: Int
+    let importStatusMessage: String
+    let importedJokeNames: [String]
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(.white)
+                Text("Importing Jokes...")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+            if importFileCount > 0 {
+                Text("File \(importFileIndex)/\(importFileCount)")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            if !importStatusMessage.isEmpty {
+                Text(importStatusMessage)
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.9))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            if !importedJokeNames.isEmpty {
+                importedJokesList
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: 300)
+        .background(AppTheme.Colors.surfaceElevated.opacity(0.95))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.4), radius: 20)
+    }
+
+    @ViewBuilder
+    private var importedJokesList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider().background(Color.white.opacity(0.3))
+            Text("\(importedJokeNames.count) joke\(importedJokeNames.count == 1 ? "" : "s") added")
+                .font(.caption.bold())
+                .foregroundColor(AppTheme.Colors.success)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(importedJokeNames.suffix(8), id: \.self) { name in
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.Colors.success)
+                            Text(name)
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 160)
+        }
+    }
+}
+// MARK: - Review Imports Sheet (extracted)
+
+struct ReviewImportsSheet: View {
+    @Binding var showingReviewSheet: Bool
+    let reviewCandidates: [JokeImportCandidate]
+    let possibleDuplicates: [String]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if !possibleDuplicates.isEmpty {
+                    Section("Possible Duplicates") {
+                        ForEach(possibleDuplicates, id: \.self) { dup in
+                            Label(dup, systemImage: "exclamationmark.triangle")
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+                Section("Needs Review") {
+                    ForEach(Array(reviewCandidates.enumerated()), id: \.element.id) { index, cand in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Title", text: .constant(cand.suggestedTitle))
+                                .textFieldStyle(.roundedBorder)
+                            Text(cand.content)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(6)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Review Imports")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { showingReviewSheet = false }
+                }
+            }
+        }
+    }
+}

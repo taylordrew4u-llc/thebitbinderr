@@ -1,0 +1,501 @@
+//
+//  SettingsView.swift
+//  thebitbinder
+//
+//  Created by Taylor Drew on 2/22/26.
+//
+
+import SwiftUI
+import SwiftData
+import MessageUI
+import UniformTypeIdentifiers
+
+struct SettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var jokes: [Joke]
+    @Query private var recordings: [Recording]
+    
+    
+    @State private var isExportingJokes = false
+    @State private var isExportingAudio = false
+    @State private var showExportOptions = false
+    @State private var showAudioExportOptions = false
+    @State private var exportedFileURL: URL?
+    @State private var showShareSheet = false
+    @State private var showSavedAlert = false
+    @State private var savedAlertMessage = ""
+    @State private var showMailComposer = false
+    @State private var mailAttachmentURL: URL?
+    @State private var mailSubject = ""
+    @State private var showMailUnavailableAlert = false
+    @State private var showReorderSheet = false
+    
+    // Layout reorder
+    @AppStorage("tabOrder") private var tabOrderData: Data = Data()
+    
+    @AppStorage("roastModeEnabled") private var roastMode = false
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                // MARK: - Layout
+                Section {
+                    Button {
+                        showReorderSheet = true
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Reorder Layout")
+                                    .foregroundColor(.primary)
+                                Text("Drag to rearrange your tabs")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "rectangle.3.group")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                } header: {
+                    Text("Layout")
+                }
+                
+                // MARK: - Roast Mode
+                Section {
+                    Toggle(isOn: $roastMode) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Roast Mode")
+                                    .foregroundColor(.primary)
+                                Text(roastMode
+                                     ? "Jokes section shows roast targets"
+                                     : "Jokes section shows your regular jokes")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: roastMode ? "flame.fill" : "flame")
+                                .foregroundColor(roastMode ? AppTheme.Colors.roastAccent : .gray)
+                        }
+                    }
+                    .tint(AppTheme.Colors.roastAccent)
+                } header: {
+                    Text("Mode")
+                } footer: {
+                    Text("When enabled, the Jokes tab becomes a dedicated space for writing roasts about specific people.")
+                }
+                
+                // MARK: - iCloud Sync
+                Section {
+                    NavigationLink(destination: iCloudSyncSettingsView()) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("iCloud Sync")
+                                    .foregroundColor(.primary)
+                                Text("Back up and sync your data")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "icloud.and.arrow.up.fill")
+                                .foregroundColor(AppTheme.Colors.brand)
+                        }
+                    }
+                } header: {
+                    Text("Cloud")
+                } footer: {
+                    Text("Automatically back up all your jokes, roasts, recordings, and photos to iCloud.")
+                }
+                
+                // MARK: - Export Jokes
+                Section {
+                    Button {
+                        showExportOptions = true
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Export All Jokes")
+                                    .foregroundColor(.primary)
+                                Text("\(jokes.count) jokes available")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "doc.text")
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    .disabled(jokes.isEmpty)
+                    
+                    Button {
+                        showAudioExportOptions = true
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Export All Audio Files")
+                                    .foregroundColor(.primary)
+                                Text("\(recordings.count) recordings available")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "waveform")
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .disabled(recordings.isEmpty)
+                } header: {
+                    Text("Export")
+                } footer: {
+                    Text("Export your jokes as a PDF or your audio recordings as a zip archive.")
+                }
+                
+                // MARK: - About
+                Section {
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text("9.3")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack {
+                        Text("AI Assistant")
+                        Spacer()
+                        Text("BitBuddy")
+                            .foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text("About")
+                }
+            }
+            .navigationTitle("Settings")
+            .confirmationDialog("Export Jokes", isPresented: $showExportOptions) {
+                Button("Save PDF to Device") {
+                    exportJokesAndSave()
+                }
+                Button("Send via Email") {
+                    exportJokesAndEmail()
+                }
+                Button("Share...") {
+                    exportJokesAndShare()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("How would you like to export your \(jokes.count) jokes?")
+            }
+            .confirmationDialog("Export Audio", isPresented: $showAudioExportOptions) {
+                Button("Save to Device") {
+                    exportAudioAndSave()
+                }
+                Button("Send via Email") {
+                    exportAudioAndEmail()
+                }
+                Button("Share...") {
+                    exportAudioAndShare()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("How would you like to export your \(recordings.count) audio files?")
+            }
+            .alert("Saved", isPresented: $showSavedAlert) {
+                Button("OK") { }
+            } message: {
+                Text(savedAlertMessage)
+            }
+            .alert("Email Unavailable", isPresented: $showMailUnavailableAlert) {
+                Button("OK") { }
+            } message: {
+                Text("Mail is not configured on this device. Please set up a mail account in Settings, or use the Share option instead.")
+            }
+            .sheet(isPresented: $showShareSheet) {
+                if let url = exportedFileURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
+            .sheet(isPresented: $showMailComposer) {
+                if let url = mailAttachmentURL {
+                    MailComposerView(
+                        subject: mailSubject,
+                        attachmentURL: url,
+                        isPresented: $showMailComposer
+                    )
+                }
+            }
+            .sheet(isPresented: $showReorderSheet) {
+                ReorderLayoutView()
+            }
+        }
+    }
+    
+    // MARK: - Joke Export
+    
+    private func exportJokesAndSave() {
+        guard let url = PDFExportService.exportJokesToPDF(jokes: Array(jokes), fileName: "BitBinder_AllJokes") else { return }
+        savedAlertMessage = "PDF saved to your device's Documents folder."
+        showSavedAlert = true
+        exportedFileURL = url
+    }
+    
+    private func exportJokesAndEmail() {
+        guard let url = PDFExportService.exportJokesToPDF(jokes: Array(jokes), fileName: "BitBinder_AllJokes") else { return }
+        if MFMailComposeViewController.canSendMail() {
+            mailAttachmentURL = url
+            mailSubject = "My BitBinder Jokes"
+            showMailComposer = true
+        } else {
+            showMailUnavailableAlert = true
+        }
+    }
+    
+    private func exportJokesAndShare() {
+        guard let url = PDFExportService.exportJokesToPDF(jokes: Array(jokes), fileName: "BitBinder_AllJokes") else { return }
+        exportedFileURL = url
+        showShareSheet = true
+    }
+    
+    // MARK: - Audio Export
+    
+    private func exportAudioAndSave() {
+        Task {
+            let url = await createAudioArchive()
+            guard let url else { return }
+            await MainActor.run {
+                savedAlertMessage = "Audio archive saved to your device's Documents folder."
+                showSavedAlert = true
+                exportedFileURL = url
+            }
+        }
+    }
+    
+    private func exportAudioAndEmail() {
+        Task {
+            let url = await createAudioArchive()
+            guard let url else { return }
+            await MainActor.run {
+                if MFMailComposeViewController.canSendMail() {
+                    mailAttachmentURL = url
+                    mailSubject = "My BitBinder Audio Recordings"
+                    showMailComposer = true
+                } else {
+                    showMailUnavailableAlert = true
+                }
+            }
+        }
+    }
+    
+    private func exportAudioAndShare() {
+        Task {
+            let url = await createAudioArchive()
+            guard let url else { return }
+            await MainActor.run {
+                exportedFileURL = url
+                showShareSheet = true
+            }
+        }
+    }
+    
+    /// Copies all audio recordings into a folder and creates a zip archive
+    private func createAudioArchive() async -> URL? {
+        let fm = FileManager.default
+        let documentsURL = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let exportFolder = documentsURL.appendingPathComponent("BitBinder_Audio_Export", isDirectory: true)
+        let zipURL = documentsURL.appendingPathComponent("BitBinder_Audio.zip")
+        
+        // Clean up previous exports
+        try? fm.removeItem(at: exportFolder)
+        try? fm.removeItem(at: zipURL)
+        
+        do {
+            try fm.createDirectory(at: exportFolder, withIntermediateDirectories: true)
+            
+            var copiedCount = 0
+            for recording in recordings {
+                let sourceURL = URL(fileURLWithPath: recording.fileURL)
+                guard fm.fileExists(atPath: sourceURL.path) else { continue }
+                
+                let safeName = recording.name
+                    .replacingOccurrences(of: "/", with: "-")
+                    .replacingOccurrences(of: ":", with: "-")
+                let ext = sourceURL.pathExtension.isEmpty ? "m4a" : sourceURL.pathExtension
+                let destURL = exportFolder.appendingPathComponent("\(safeName).\(ext)")
+                
+                try fm.copyItem(at: sourceURL, to: destURL)
+                copiedCount += 1
+            }
+            
+            guard copiedCount > 0 else {
+                await MainActor.run {
+                    savedAlertMessage = "No audio files found on device."
+                    showSavedAlert = true
+                }
+                return nil
+            }
+            
+            // Create zip archive
+            let coordinator = NSFileCoordinator()
+            var archiveError: NSError?
+            var resultURL: URL?
+            
+            coordinator.coordinate(readingItemAt: exportFolder, options: .forUploading, error: &archiveError) { tempZipURL in
+                try? fm.copyItem(at: tempZipURL, to: zipURL)
+                resultURL = zipURL
+            }
+            
+            // Clean up export folder
+            try? fm.removeItem(at: exportFolder)
+            
+            if let error = archiveError {
+                print("❌ Audio archive error: \(error)")
+                return nil
+            }
+            
+            return resultURL
+        } catch {
+            print("❌ Audio export error: \(error)")
+            return nil
+        }
+    }
+}
+
+// MARK: - Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let vc = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        return vc
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Mail Composer
+
+struct MailComposerView: UIViewControllerRepresentable {
+    let subject: String
+    let attachmentURL: URL
+    @Binding var isPresented: Bool
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    func makeUIViewController(context: Context) -> MFMailComposeViewController {
+        let vc = MFMailComposeViewController()
+        vc.mailComposeDelegate = context.coordinator
+        vc.setSubject(subject)
+        vc.setMessageBody("Exported from The BitBinder app.", isHTML: false)
+        
+        if let data = try? Data(contentsOf: attachmentURL) {
+            let mimeType: String
+            let ext = attachmentURL.pathExtension.lowercased()
+            switch ext {
+            case "pdf": mimeType = "application/pdf"
+            case "zip": mimeType = "application/zip"
+            default: mimeType = "application/octet-stream"
+            }
+            vc.addAttachmentData(data, mimeType: mimeType, fileName: attachmentURL.lastPathComponent)
+        }
+        
+        return vc
+    }
+    
+    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
+    
+    class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
+        let parent: MailComposerView
+        
+        init(_ parent: MailComposerView) {
+            self.parent = parent
+        }
+        
+        func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
+            parent.isPresented = false
+        }
+    }
+}
+
+// MARK: - Reorder Layout View
+
+struct ReorderLayoutView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("tabOrder") private var tabOrderData: Data = Data()
+    @State private var screens: [AppScreen] = AppScreen.allCases
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(screens, id: \.self) { screen in
+                        HStack(spacing: 16) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(screen.color.opacity(0.15))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: screen.icon)
+                                    .foregroundColor(screen.color)
+                                    .font(.system(size: 18, weight: .semibold))
+                            }
+                            
+                            Text(screen.rawValue)
+                                .font(.body)
+                                .fontWeight(.medium)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "line.3.horizontal")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .onMove(perform: moveScreens)
+                } header: {
+                    Text("Drag to reorder your tabs")
+                } footer: {
+                    Text("This controls the order screens appear in your navigation menu.")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Reorder Layout")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        saveOrder()
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                loadOrder()
+            }
+        }
+    }
+    
+    private func moveScreens(from source: IndexSet, to destination: Int) {
+        screens.move(fromOffsets: source, toOffset: destination)
+    }
+    
+    private func saveOrder() {
+        let rawValues = screens.map { $0.rawValue }
+        if let data = try? JSONEncoder().encode(rawValues) {
+            tabOrderData = data
+        }
+    }
+    
+    private func loadOrder() {
+        guard !tabOrderData.isEmpty,
+              let rawValues = try? JSONDecoder().decode([String].self, from: tabOrderData) else { return }
+        let ordered = rawValues.compactMap { raw in AppScreen(rawValue: raw) }
+        if ordered.count == AppScreen.allCases.count {
+            screens = ordered
+        }
+    }
+}
+
+#Preview {
+    SettingsView()
+        .modelContainer(for: [Joke.self, Recording.self], inMemory: true)
+}

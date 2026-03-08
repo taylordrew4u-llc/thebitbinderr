@@ -43,6 +43,108 @@ struct JokeDetailView: View {
                 
                 Divider()
                 
+                // The Hits Button - prominent at top of metadata
+                Button(action: { 
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        joke.isHit.toggle()
+                        joke.dateModified = Date()
+                    }
+                }) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    joke.isHit 
+                                        ? LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        : LinearGradient(colors: [Color(.systemGray5), Color(.systemGray4)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                )
+                                .frame(width: 44, height: 44)
+                            
+                            Image(systemName: joke.isHit ? "star.fill" : "star")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(joke.isHit ? .white : .gray)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(joke.isHit ? "In The Hits!" : "Add to The Hits")
+                                .font(.headline)
+                                .foregroundColor(joke.isHit ? .orange : .primary)
+                            Text(joke.isHit ? "This joke is perfected and ready" : "Mark as a perfected joke")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        if joke.isHit {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.title2)
+                        }
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(joke.isHit ? Color.yellow.opacity(0.1) : Color(.systemGray6))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(joke.isHit ? Color.orange.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                
+                // The Hits Button - prominent at top of metadata
+                Button(action: { 
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        joke.isHit.toggle()
+                        joke.dateModified = Date()
+                    }
+                }) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    joke.isHit 
+                                        ? LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        : LinearGradient(colors: [Color(.systemGray5), Color(.systemGray4)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                )
+                                .frame(width: 44, height: 44)
+                            
+                            Image(systemName: joke.isHit ? "star.fill" : "star")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(joke.isHit ? .white : .gray)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(joke.isHit ? "In The Hits!" : "Add to The Hits")
+                                .font(.headline)
+                                .foregroundColor(joke.isHit ? .orange : .primary)
+                            Text(joke.isHit ? "This joke is perfected and ready" : "Mark as a perfected joke")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        if joke.isHit {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.title2)
+                        }
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(joke.isHit ? Color.yellow.opacity(0.1) : Color(.systemGray6))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(joke.isHit ? Color.orange.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Label("Created", systemImage: "calendar")

@@ -1,0 +1,48 @@
+{
+  "rules": {
+    "aiWidget": {
+      "conversations": {
+        "$conversationId": {
+          ".read": "auth != null || root.child('aiWidget').child('conversations').child($conversationId).child('metadata').child('isPublic').val() === true",
+          ".write": "auth != null || root.child('aiWidget').child('conversations').child($conversationId).child('metadata').child('ownerId').val() === null",
+          "messages": {
+            "$messageId": {
+              ".read": "auth != null || root.child('aiWidget').child('conversations').child($conversationId).child('metadata').child('isPublic').val() === true",
+              ".write": "auth != null || root.child('aiWidget').child('conversations').child($conversationId).child('metadata').child('ownerId').val() === null",
+              ".validate": "newData.hasChildren(['text', 'isUser', 'timestamp', 'sender'])"
+            }
+          },
+          "metadata": {
+            ".read": "auth != null || root.child('aiWidget').child('conversations').child($conversationId).child('metadata').child('ownerId').val() === null",
+            ".write": "auth != null || root.child('aiWidget').child('conversations').child($conversationId).child('metadata').child('ownerId').val() === null",
+            ".validate": "newData.hasChild('lastUpdated') && newData.child('lastUpdated').isNumber()"
+          }
+        }
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "profile": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && newData.hasChildren(['createdAt', 'lastActive'])",
+          ".validate": "newData.child('createdAt').isNumber() && newData.child('lastActive').isNumber()",
+          "createdAt": {
+            ".validate": "data.val() === newData.val()"
+          },
+          "lastActive": {
+            ".validate": "newData.val() <= now"
+          }
+        },
+        "conversations": {
+          "$conversationId": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.val() === true"
+          }
+        }
+      }
+    }
+  }
+}

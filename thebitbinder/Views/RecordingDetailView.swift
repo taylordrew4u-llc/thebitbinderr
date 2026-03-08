@@ -256,7 +256,10 @@ struct RecordingDetailView: View {
         
         Task {
             do {
-                let url = URL(fileURLWithPath: recording.fileURL)
+                // Construct the proper file URL from Documents directory
+                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let url = documentsPath.appendingPathComponent(recording.fileURL)
+                
                 let result = try await AudioTranscriptionService.shared.transcribe(audioURL: url)
                 
                 await MainActor.run {

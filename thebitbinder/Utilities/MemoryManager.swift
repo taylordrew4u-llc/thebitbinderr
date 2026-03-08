@@ -2,83 +2,100 @@
 //  MemoryManager.swift
 //  thebitbinder
 //
-//  Created by Taylor Drew on 12/2/25.
+//  Memory management utility for the app
 //
 
-import Foundation
 import UIKit
+import Foundation
 
-class MemoryManager {
+/// Centralized memory management for the app
+final class MemoryManager {
     static let shared = MemoryManager()
     
     private init() {
-        // Monitor memory warnings
+        setupMemoryWarningObserver()
+    }
+    
+    private func setupMemoryWarningObserver() {
         NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleMemoryWarning),
-            name: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil
-        )
-    }
-    
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-    
-    @objc private func handleMemoryWarning() {
-        print("⚠️ Memory warning received - clearing caches")
-        URLCache.shared.removeAllCachedResponses()
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleMemoryWarning()
+        }
         
-        // Post notification for views to clean up
-        NotificationCenter.default.post(
-            name: NSNotification.Name("ClearMemoryCaches"),
-            object: nil
-        )
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleBackgroundTransition()
+        }
     }
     
-    // Process images with memory management
-    static func processImages<T>(_ images: [UIImage],
-                                 batchSize: Int = 3,
-                                 processor: @escaping (UIImage) async throws -> T) async throws -> [T] {
-        var results: [T] = []
+    /// Called when system sends memory warning
+    func handleMemoryWarning() {
+        print("⚠️ [MemoryManager] Memory warning received - clearing caches")
         
-        // Process in batches to prevent memory spikes
-        for batch in stride(from: 0, to: images.count, by: batchSize) {
-            let endIndex = min(batch + batchSize, images.count)
-            let batchImages = Array(images[batch..<endIndex])
+        // Perform cache clearing off the main thread to avoid UI hangs
+        DispatchQueue.global(qos: .utility).async {
+            // Clear image caches
+            ImageCache.shared.clearCache()
             
-            for image in batchImages {
-                // Use autoreleasepool for each image
-                let result = try await autoreleasepool {
-                    try await processor(image)
-                }
-                results.append(result)
+            // Clear URL caches
+            URLCache.shared.removeAllCachedResponses()
+            
+            // Force a garbage collection hint
+            autoreleasepool { }
+            
+            // Notify listeners on the main thread
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .appMemoryWarning, object: nil)
+                print("✅ [MemoryManager] Caches cleared")
             }
+        }
+    }
+    
+    /// Called when app enters background
+    func handleBackgroundTransition() {
+        print("📱 [MemoryManager] App entering background - reducing memory footprint")
+        
+        // Perform cache clearing off the main thread
+        DispatchQueue.global(qos: .utility).async {
+            // Clear image cache to free memory while in background
+            ImageCache.shared.clearCache()
             
-            // Small delay between batches to allow memory cleanup
-            if endIndex < images.count {
-                try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+            // Clear URL cache
+            URLCache.shared.removeAllCachedResponses()
+        }
+    }
+    
+    /// Call this to proactively reduce memory usage
+    func reduceMemoryUsage() {
+        handleMemoryWarning()
+    }
+    
+    /// Report current memory usage (for debugging)
+    func reportMemoryUsage() {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
+        
+        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
             }
         }
         
-        return results
-    }
-    
-    // Memory-efficient data loading
-    static func loadDataSafely(from url: URL, maxSize: Int = 10 * 1024 * 1024) throws -> Data? {
-        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        let fileSize = attributes[.size] as? Int ?? 0
-        
-        if fileSize > maxSize {
-            print("⚠️ File too large: \(fileSize) bytes, skipping")
-            return nil
+        if kerr == KERN_SUCCESS {
+            let usedMB = Double(info.resident_size) / 1024.0 / 1024.0
+            print("📊 [MemoryManager] Memory usage: \(String(format: "%.1f", usedMB)) MB")
         }
-        
-        return try Data(contentsOf: url)
     }
 }
 
-// Async autoreleasepool for Swift concurrency
-func autoreleasepool<T>(_ block: () async throws -> T) async throws -> T {
-    return try await block()
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let appMemoryWarning = Notification.Name("appMemoryWarning")
 }
