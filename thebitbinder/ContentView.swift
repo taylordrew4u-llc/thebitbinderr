@@ -188,7 +188,7 @@ struct MainTabView: View {
                 Color.black.opacity(roastMode ? 0.65 : 0.4)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        dismissKeyboard()
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             showMenu = false
                         }
@@ -251,7 +251,7 @@ struct MainTabView: View {
 
                         // Menu button
                         Button {
-                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            dismissKeyboard()
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                                 showMenu = true
                             }
@@ -342,7 +342,7 @@ struct ModernSideMenu: View {
                 HStack {
                     Spacer()
                     Button {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        dismissKeyboard()
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { showMenu = false }
                     } label: {
                         Image(systemName: "xmark")
@@ -382,7 +382,7 @@ struct ModernSideMenu: View {
                 HStack {
                     Spacer()
                     Button {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        dismissKeyboard()
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { showMenu = false }
                     } label: {
                         Image(systemName: "xmark")

@@ -44,7 +44,7 @@ struct ModernNotepad: View {
     private let holeX: CGFloat = 18   // punch hole x center
 
     private func dismiss() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        dismissKeyboard()
     }
 
     var body: some View {

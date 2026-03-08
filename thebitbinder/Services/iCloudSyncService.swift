@@ -172,8 +172,10 @@ final class iCloudSyncService: NSObject, ObservableObject {
     
     private func hapticFeedback() {
         guard isHapticFeedbackEnabled else { return }
+#if !targetEnvironment(macCatalyst)
         let feedback = UINotificationFeedbackGenerator()
         feedback.notificationOccurred(.success)
+#endif
     }
     
     // MARK: - Check Sync Status

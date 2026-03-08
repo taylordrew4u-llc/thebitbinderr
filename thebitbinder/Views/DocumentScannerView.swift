@@ -8,6 +8,7 @@
 import SwiftUI
 import VisionKit
 
+#if !targetEnvironment(macCatalyst)
 struct DocumentScannerView: UIViewControllerRepresentable {
     let completion: ([UIImage]) -> Void
     
@@ -32,9 +33,7 @@ struct DocumentScannerView: UIViewControllerRepresentable {
         
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
             var images: [UIImage] = []
-            for i in 0..<scan.pageCount {
-                images.append(scan.imageOfPage(at: i))
-            }
+            for i in 0..<scan.pageCount { images.append(scan.imageOfPage(at: i)) }
             completion(images)
             controller.dismiss(animated: true)
         }
@@ -44,8 +43,25 @@ struct DocumentScannerView: UIViewControllerRepresentable {
         }
         
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
-            print("Document scanner failed with error: \(error)")
+            print("Document scanner failed: \(error)")
             controller.dismiss(animated: true)
         }
     }
 }
+#else
+/// Stub so call sites compile on macOS Catalyst (camera scanning not available)
+struct DocumentScannerView: View {
+    let completion: ([UIImage]) -> Void
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "camera.badge.exclamationmark")
+                .font(.system(size: 44))
+                .foregroundColor(.secondary)
+            Text("Document scanning is not available on Mac.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+        }
+        .padding(40)
+    }
+}
+#endif

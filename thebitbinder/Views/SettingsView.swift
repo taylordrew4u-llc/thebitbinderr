@@ -150,6 +150,26 @@ struct SettingsView: View {
                     Text("Export your jokes as a PDF or your audio recordings as a zip archive.")
                 }
                 
+                // MARK: - Help
+                Section {
+                    NavigationLink(destination: HelpFAQView()) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Help & FAQ")
+                                    .foregroundColor(.primary)
+                                Text("Guides, tips, and answers")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "questionmark.circle.fill")
+                                .foregroundColor(.purple)
+                        }
+                    }
+                } header: {
+                    Text("Support")
+                }
+
                 // MARK: - About
                 Section {
                     HStack {
@@ -239,6 +259,7 @@ struct SettingsView: View {
     
     private func exportJokesAndEmail() {
         guard let url = PDFExportService.exportJokesToPDF(jokes: Array(jokes), fileName: "BitBinder_AllJokes") else { return }
+#if !targetEnvironment(macCatalyst)
         if MFMailComposeViewController.canSendMail() {
             mailAttachmentURL = url
             mailSubject = "My BitBinder Jokes"
@@ -246,6 +267,10 @@ struct SettingsView: View {
         } else {
             showMailUnavailableAlert = true
         }
+#else
+        exportedFileURL = url
+        showShareSheet = true
+#endif
     }
     
     private func exportJokesAndShare() {
@@ -273,6 +298,7 @@ struct SettingsView: View {
             let url = await createAudioArchive()
             guard let url else { return }
             await MainActor.run {
+#if !targetEnvironment(macCatalyst)
                 if MFMailComposeViewController.canSendMail() {
                     mailAttachmentURL = url
                     mailSubject = "My BitBinder Audio Recordings"
@@ -280,6 +306,10 @@ struct SettingsView: View {
                 } else {
                     showMailUnavailableAlert = true
                 }
+#else
+                exportedFileURL = url
+                showShareSheet = true
+#endif
             }
         }
     }
@@ -373,32 +403,24 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 // MARK: - Mail Composer
 
+#if !targetEnvironment(macCatalyst)
 struct MailComposerView: UIViewControllerRepresentable {
     let subject: String
     let attachmentURL: URL
     @Binding var isPresented: Bool
     
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
     
     func makeUIViewController(context: Context) -> MFMailComposeViewController {
         let vc = MFMailComposeViewController()
         vc.mailComposeDelegate = context.coordinator
         vc.setSubject(subject)
         vc.setMessageBody("Exported from The BitBinder app.", isHTML: false)
-        
         if let data = try? Data(contentsOf: attachmentURL) {
-            let mimeType: String
             let ext = attachmentURL.pathExtension.lowercased()
-            switch ext {
-            case "pdf": mimeType = "application/pdf"
-            case "zip": mimeType = "application/zip"
-            default: mimeType = "application/octet-stream"
-            }
+            let mimeType = ext == "pdf" ? "application/pdf" : ext == "zip" ? "application/zip" : "application/octet-stream"
             vc.addAttachmentData(data, mimeType: mimeType, fileName: attachmentURL.lastPathComponent)
         }
-        
         return vc
     }
     
@@ -406,16 +428,20 @@ struct MailComposerView: UIViewControllerRepresentable {
     
     class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
         let parent: MailComposerView
-        
-        init(_ parent: MailComposerView) {
-            self.parent = parent
-        }
-        
+        init(_ parent: MailComposerView) { self.parent = parent }
         func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
             parent.isPresented = false
         }
     }
 }
+#else
+struct MailComposerView: View {
+    let subject: String
+    let attachmentURL: URL
+    @Binding var isPresented: Bool
+    var body: some View { EmptyView() }
+}
+#endif
 
 // MARK: - Reorder Layout View
 

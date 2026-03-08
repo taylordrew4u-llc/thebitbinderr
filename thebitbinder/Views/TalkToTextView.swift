@@ -175,7 +175,7 @@ struct TalkToTextView: View {
             .alert("Permissions Required", isPresented: $showingPermissionAlert) {
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
+                        openURL(url)
                     }
                 }
                 Button("Cancel", role: .cancel) {

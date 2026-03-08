@@ -106,7 +106,7 @@ struct BrainstormView: View {
             .alert("Microphone Permission Required", isPresented: $showingPermissionAlert) {
                 Button("Settings", role: .none) {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
+                        openURL(url)
                     }
                 }
                 Button("Cancel", role: .cancel) {}

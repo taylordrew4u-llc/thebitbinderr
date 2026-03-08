@@ -183,3 +183,21 @@ extension View {
         }
     }
 }
+
+// MARK: - Cross-platform helpers
+
+/// Dismiss the keyboard on iOS; no-op on macOS Catalyst
+func dismissKeyboard() {
+#if !targetEnvironment(macCatalyst)
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+#endif
+}
+
+/// Open a URL — uses UIApplication on iOS, NSWorkspace on macOS Catalyst
+func openURL(_ url: URL) {
+#if targetEnvironment(macCatalyst)
+    NSWorkspace.shared.open(url)
+#else
+    UIApplication.shared.open(url)
+#endif
+}

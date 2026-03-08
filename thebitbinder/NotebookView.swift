@@ -241,6 +241,7 @@ struct NotebookDetailView: View {
 
 // MARK: - CameraView (UIKit wrapped)
 
+#if !targetEnvironment(macCatalyst)
 struct CameraView: UIViewControllerRepresentable {
     @Binding var image: UIImage?
     @Environment(\.dismiss) private var dismiss
@@ -252,30 +253,35 @@ struct CameraView: UIViewControllerRepresentable {
         return picker
     }
     
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {
-        // no update needed
-    }
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
     
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
     
     class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         let parent: CameraView
+        init(parent: CameraView) { self.parent = parent }
         
-        init(parent: CameraView) {
-            self.parent = parent
-        }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
         
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let uiImage = info[.originalImage] as? UIImage {
-                parent.image = uiImage
-            }
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let uiImage = info[.originalImage] as? UIImage { parent.image = uiImage }
             parent.dismiss()
         }
     }
 }
+#else
+struct CameraView: View {
+    @Binding var image: UIImage?
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "camera.badge.exclamationmark")
+                .font(.system(size: 44))
+                .foregroundColor(.secondary)
+            Text("Camera is not available on Mac.\nUse the photo picker instead.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+        }
+        .padding(40)
+    }
+}
+#endif
