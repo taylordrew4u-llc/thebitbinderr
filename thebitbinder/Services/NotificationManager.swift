@@ -129,7 +129,7 @@ final class NotificationManager: NSObject, ObservableObject, UNUserNotificationC
         let now = Date()
         guard let tomorrow = cal.date(byAdding: .day, value: 1, to: now) else { return }
 
-        var start = startMinute
+        let start = startMinute
         var end   = endMinute
         if start >= end { end = start + 60 }                     // safety: at least 1-hour window
         let randomMinute = Int.random(in: start..<end)           // minutes from midnight

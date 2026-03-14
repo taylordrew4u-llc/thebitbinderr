@@ -5,6 +5,7 @@ struct HomeView: View {
     private let notepadKey = "notepadText"
     @AppStorage("roastModeEnabled") private var roastMode = false
     @StateObject private var syncService = iCloudSyncService.shared
+    private let kvStore = iCloudKeyValueStore.shared
 
     var body: some View {
         NavigationStack {
@@ -19,11 +20,10 @@ struct HomeView: View {
                 .toolbarBackground(.visible, for: .navigationBar)
                 .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)
                 .onAppear {
-                    notepadText = UserDefaults.standard.string(forKey: notepadKey) ?? ""
+                    notepadText = kvStore.string(forKey: notepadKey) ?? ""
                 }
                 .onChange(of: notepadText) { _, v in
-                    UserDefaults.standard.set(v, forKey: notepadKey)
-                    // Sync thoughts to iCloud
+                    kvStore.set(v, forKey: notepadKey)
                     Task {
                         await syncService.syncThoughts(v)
                     }

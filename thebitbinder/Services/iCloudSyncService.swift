@@ -81,6 +81,9 @@ final class iCloudSyncService: NSObject, ObservableObject {
         syncStatus = .syncing
         defer { lastSyncDate = Date(); userDefaults.set(lastSyncDate, forKey: lastSyncDateKey) }
         
+        // Push user settings to iCloud KV store
+        iCloudKeyValueStore.shared.pushToCloud()
+        
         // Sync all data types
         await syncJokes()
         await syncRoastTargets()

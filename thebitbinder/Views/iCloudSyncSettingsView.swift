@@ -14,209 +14,207 @@ struct iCloudSyncSettingsView: View {
     @State private var iCloudAvailable = true
     
     var body: some View {
-        VStack(spacing: 24) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "icloud.and.arrow.up.fill")
-                    .font(.system(size: 48))
-                    .foregroundColor(AppTheme.Colors.brand)
-                
-                Text("iCloud Sync")
-                    .font(.system(size: 24, weight: .bold, design: .serif))
-                    .foregroundColor(AppTheme.Colors.inkBlack)
-                
-                Text("Back up and sync all your jokes, roasts, and recordings")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.surfaceElevated))
-            
-            // Status
-            VStack(spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Status")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                        
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(syncService.isSyncEnabled ? AppTheme.Colors.success : Color.gray)
-                                .frame(width: 8, height: 8)
-                            
-                            Text(syncService.isSyncEnabled ? "Syncing" : "Off")
-                                .font(.system(size: 15, weight: .semibold, design: .serif))
-                                .foregroundColor(AppTheme.Colors.inkBlack)
-                        }
-                    }
+        ScrollView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "icloud.and.arrow.up.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(AppTheme.Colors.brand)
                     
-                    Spacer()
+                    Text("iCloud Sync")
+                        .font(.system(size: 24, weight: .bold, design: .serif))
+                        .foregroundColor(AppTheme.Colors.inkBlack)
                     
-                    if let lastSync = syncService.lastSyncDate {
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Last Sync")
+                    Text("Back up and sync all your jokes, roasts, and recordings")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.surfaceElevated))
+                
+                // Status
+                VStack(spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Status")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(AppTheme.Colors.textTertiary)
                             
-                            Text(lastSync.formatted(date: .abbreviated, time: .shortened))
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(syncService.isSyncEnabled ? AppTheme.Colors.success : Color.gray)
+                                    .frame(width: 8, height: 8)
+                                
+                                Text(syncService.isSyncEnabled ? "Syncing" : "Off")
+                                    .font(.system(size: 15, weight: .semibold, design: .serif))
+                                    .foregroundColor(AppTheme.Colors.inkBlack)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        if let lastSync = syncService.lastSyncDate {
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("Last Sync")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                
+                                Text(lastSync.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.paperAged))
+                    
+                    // Sync Status Message
+                    if case .syncing = syncService.syncStatus {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .scaleEffect(0.8, anchor: .center)
+                            Text("Syncing to iCloud...")
+                                .font(.system(size: 13))
+                                .foregroundColor(AppTheme.Colors.info)
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.info.opacity(0.1)))
+                    } else if case .success = syncService.syncStatus {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(AppTheme.Colors.success)
+                            Text("Sync complete")
+                                .font(.system(size: 13))
+                                .foregroundColor(AppTheme.Colors.success)
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.success.opacity(0.1)))
+                    } else if case .error(let message) = syncService.syncStatus {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundColor(AppTheme.Colors.error)
+                            Text(message)
+                                .font(.system(size: 13))
+                                .foregroundColor(AppTheme.Colors.error)
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.error.opacity(0.1)))
+                    }
+                }
+                
+                // Toggle & Actions
+                VStack(spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Enable iCloud Sync")
+                                .font(.system(size: 15, weight: .semibold, design: .serif))
+                                .foregroundColor(AppTheme.Colors.inkBlack)
+                            
+                            Text("Automatically backup your data")
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundColor(AppTheme.Colors.textSecondary)
                         }
+                        
+                        Spacer()
+                        
+                        Toggle("", isOn: Binding(
+                            get: { syncService.isSyncEnabled },
+                            set: { newValue in
+                                if newValue {
+                                    Task { await syncService.enableiCloudSync() }
+                                } else {
+                                    syncService.disableiCloudSync()
+                                }
+                            }
+                        ))
+                        .tint(AppTheme.Colors.brand)
+                    }
+                    .padding(16)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.surfaceElevated))
+                    
+                    if syncService.isSyncEnabled {
+                        Button(action: {
+                            Task { await syncService.syncNow() }
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 14, weight: .semibold))
+                                Text("Sync Now")
+                                    .font(.system(size: 15, weight: .semibold, design: .serif))
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.brand))
+                            .foregroundColor(.white)
+                        }
+                        .disabled(syncService.syncStatus == .syncing)
+                        .opacity(syncService.syncStatus == .syncing ? 0.6 : 1.0)
+                    }
+                }
+                
+                // What Gets Synced
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("What Gets Synced")
+                        .font(.system(size: 14, weight: .semibold, design: .serif))
+                        .foregroundColor(AppTheme.Colors.inkBlack)
+                    
+                    VStack(spacing: 10) {
+                        SyncItemRow(icon: "lightbulb.fill", label: "Thoughts & Ideas", detail: "Your notepad content and quick thoughts")
+                        SyncItemRow(icon: "text.quote", label: "Jokes & Roasts", detail: "All your jokes and roast targets")
+                        SyncItemRow(icon: "list.bullet.rectangle", label: "Set Lists", detail: "Your comedy set lists")
+                        SyncItemRow(icon: "waveform", label: "Voice Recordings", detail: "All voice memos and recordings")
+                        SyncItemRow(icon: "photo.on.rectangle", label: "Notebook Photos", detail: "Scanned notebook pages")
                     }
                 }
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.paperAged))
                 
-                // Sync Status Message
-                if case .syncing = syncService.syncStatus {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .scaleEffect(0.8, anchor: .center)
-                        Text("Syncing to iCloud...")
-                            .font(.system(size: 13))
-                            .foregroundColor(AppTheme.Colors.info)
-                        Spacer()
-                    }
-                    .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.info.opacity(0.1)))
-                } else if case .success = syncService.syncStatus {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(AppTheme.Colors.success)
-                        Text("Sync complete")
-                            .font(.system(size: 13))
-                            .foregroundColor(AppTheme.Colors.success)
-                        Spacer()
-                    }
-                    .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.success.opacity(0.1)))
-                } else if case .error(let message) = syncService.syncStatus {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundColor(AppTheme.Colors.error)
-                        Text(message)
-                            .font(.system(size: 13))
-                            .foregroundColor(AppTheme.Colors.error)
-                        Spacer()
-                    }
-                    .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.error.opacity(0.1)))
-                }
-            }
-            
-            // Toggle & Actions
-            VStack(spacing: 12) {
-                // Enable/Disable Toggle
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Enable iCloud Sync")
-                            .font(.system(size: 15, weight: .semibold, design: .serif))
-                            .foregroundColor(AppTheme.Colors.inkBlack)
-                        
-                        Text("Automatically backup your data")
-                            .font(.system(size: 12, weight: .regular))
+                // Info
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(AppTheme.Colors.info)
+                                .font(.system(size: 13))
+                            Text("Automatic Syncing")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.inkBlack)
+                        }
+                        Text("When enabled, your data syncs automatically when connected to WiFi or Cellular. Manual sync is also available.")
+                            .font(.system(size: 12))
                             .foregroundColor(AppTheme.Colors.textSecondary)
+                            .lineSpacing(1.5)
                     }
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.info.opacity(0.08)))
                     
-                    Spacer()
-                    
-                    Toggle("", isOn: Binding(
-                        get: { syncService.isSyncEnabled },
-                        set: { newValue in
-                            if newValue {
-                                Task { await syncService.enableiCloudSync() }
-                            } else {
-                                syncService.disableiCloudSync()
-                            }
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.fill")
+                                .foregroundColor(AppTheme.Colors.success)
+                                .font(.system(size: 13))
+                            Text("End-to-End Encrypted")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.inkBlack)
                         }
-                    ))
-                    .tint(AppTheme.Colors.brand)
-                }
-                .padding(16)
-                .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.surfaceElevated))
-                
-                // Manual Sync Button
-                if syncService.isSyncEnabled {
-                    Button(action: {
-                        Task { await syncService.syncNow() }
-                    }) {
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("Sync Now")
-                                .font(.system(size: 15, weight: .semibold, design: .serif))
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(14)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.brand))
-                        .foregroundColor(.white)
+                        Text("Your data is encrypted in transit and at rest. Only you can access your jokes.")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .lineSpacing(1.5)
                     }
-                    .disabled(syncService.syncStatus == .syncing)
-                    .opacity(syncService.syncStatus == .syncing ? 0.6 : 1.0)
-                }
-            }
-            
-            // What Gets Synced
-            VStack(alignment: .leading, spacing: 12) {
-                Text("What Gets Synced")
-                    .font(.system(size: 14, weight: .semibold, design: .serif))
-                    .foregroundColor(AppTheme.Colors.inkBlack)
-                
-                VStack(spacing: 10) {
-                    SyncItemRow(icon: "lightbulb.fill", label: "Thoughts & Ideas", detail: "Your notepad content and quick thoughts")
-                    SyncItemRow(icon: "text.quote", label: "Jokes & Roasts", detail: "All your jokes and roast targets")
-                    SyncItemRow(icon: "list.bullet.rectangle", label: "Set Lists", detail: "Your comedy set lists")
-                    SyncItemRow(icon: "waveform", label: "Voice Recordings", detail: "All voice memos and recordings")
-                    SyncItemRow(icon: "photo.on.rectangle", label: "Notebook Photos", detail: "Scanned notebook pages")
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.success.opacity(0.08)))
                 }
             }
             .padding(16)
-            .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.paperAged))
-            
-            // Info
-            VStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundColor(AppTheme.Colors.info)
-                            .font(.system(size: 13))
-                        Text("Automatic Syncing")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.inkBlack)
-                    }
-                    Text("When enabled, your data syncs automatically when connected to WiFi or Cellular. Manual sync is also available.")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineSpacing(1.5)
-                }
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.info.opacity(0.08)))
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "lock.fill")
-                            .foregroundColor(AppTheme.Colors.success)
-                            .font(.system(size: 13))
-                        Text("End-to-End Encrypted")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.inkBlack)
-                    }
-                    Text("Your data is encrypted in transit and at rest. Only you can access your jokes.")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineSpacing(1.5)
-                }
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.success.opacity(0.08)))
-            }
-            
-            Spacer()
         }
-        .padding(16)
         .onAppear {
             Task {
                 iCloudAvailable = await syncService.checkiCloudAvailability()

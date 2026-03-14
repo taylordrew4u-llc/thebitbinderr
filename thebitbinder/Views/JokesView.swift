@@ -331,8 +331,10 @@ struct JokesView: View {
     var body: some View {
         NavigationStack {
             mainContent
-                .background(roastMode ? AppTheme.Colors.roastBackground : Color.clear)
-                .ignoresSafeArea(edges: roastMode ? .all : [])
+                .background(
+                    (roastMode ? AppTheme.Colors.roastBackground : Color.clear)
+                        .ignoresSafeArea()
+                )
                 .navigationTitle(roastMode ? "🔥 Roasts" : "Jokes")
                 .searchable(text: $searchText, prompt: roastMode ? "Search targets" : "Search jokes")
                 .toolbarBackground(

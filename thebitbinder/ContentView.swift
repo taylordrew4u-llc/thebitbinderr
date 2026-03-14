@@ -190,11 +190,12 @@ struct MainTabView: View {
                     ))
             }
 
-            // Floating FABs — top bar with back button on left, AI + menu on right
+            // Floating FABs — back button on left, menu on right
             if !showMenu {
-                VStack {
-                    HStack(spacing: 12) {
-                        // Back button — only visible when there's history
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .overlay(alignment: .topLeading) {
                         if canGoBack {
                             Button {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -214,11 +215,11 @@ struct MainTabView: View {
                             }
                             .buttonStyle(FABButtonStyle())
                             .transition(.scale.combined(with: .opacity))
+                            .padding(.leading, 20)
+                            .padding(.top, 56)
                         }
-
-                        Spacer()
-
-                        // Menu button
+                    }
+                    .overlay(alignment: .topTrailing) {
                         Button {
                             dismissKeyboard()
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -239,11 +240,9 @@ struct MainTabView: View {
                             )
                         }
                         .buttonStyle(FABButtonStyle())
+                        .padding(.trailing, 20)
+                        .padding(.top, 56)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 56)
-                    Spacer()
-                }
             }
         }
         .onChange(of: roastMode) { _, newValue in
@@ -330,7 +329,7 @@ struct ModernSideMenu: View {
             HStack(spacing: 4) {
                 Image(systemName: roastMode ? "flame" : "pencil.and.scribble")
                     .font(.caption2)
-                Text("v9.1")
+                Text("v9.4")
                     .font(.system(size: 11, design: .serif))
             }
             .foregroundStyle(roastMode ? Color.orange.opacity(0.5) : AppTheme.Colors.textTertiary)

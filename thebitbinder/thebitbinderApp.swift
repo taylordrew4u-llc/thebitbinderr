@@ -28,14 +28,14 @@ struct thebitbinderApp: App {
         // Store URL — all fallback paths use the same file so data is never orphaned
         let storeURL = URL.applicationSupportDirectory.appending(path: "thebitbinder.store")
 
-        // 1️⃣ Try persistent + CloudKit
+        // 1️⃣ Try persistent + CloudKit (iCloud.10Bit)
         do {
             let config = ModelConfiguration(
                 "BitBinderStore",
                 schema: schema,
                 url: storeURL,
                 allowsSave: true,
-                cloudKitDatabase: .automatic
+                cloudKitDatabase: .private("iCloud.10Bit")
             )
             let container = try ModelContainer(for: schema, configurations: [config])
             print("✅ [ModelContainer] Persistent + CloudKit ready")
@@ -95,16 +95,12 @@ struct thebitbinderApp: App {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
-        .onChange(of: scenePhase) { _, newPhase in
-            switch newPhase {
-            case .background:
-                // Save any pending model context changes immediately
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .background {
                 try? sharedModelContainer.mainContext.save()
-            case .active:
-                // Nothing needed — SwiftData context is already live
-                break
-            default:
-                break
+                iCloudKeyValueStore.shared.pushToCloud()
+            } else if newPhase == .active {
+                iCloudKeyValueStore.shared.pullFromCloud()
             }
         }
     }

@@ -128,11 +128,9 @@ struct BrainstormView: View {
             }
         }
         .tint(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
-        .onChange(of: speechManager.isRecording) { _, managerRecording in
-            if !managerRecording && isRecording {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    isRecording = false
-                }
+        .onChange(of: speechManager.isRecording) { oldValue, newValue in
+            if oldValue && !newValue && isRecording {
+                isRecording = false
             }
         }
     }

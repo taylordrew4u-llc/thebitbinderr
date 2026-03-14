@@ -182,13 +182,6 @@ struct TouchReactiveStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? pressedScale : 1.0)
             .opacity(configuration.isPressed ? 0.85 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { _, pressed in
-                if pressed, let style = hapticStyle {
-                    #if !targetEnvironment(macCatalyst)
-                    UIImpactFeedbackGenerator(style: style).impactOccurred()
-                    #endif
-                }
-            }
     }
 }
 
@@ -199,13 +192,6 @@ struct FABButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
             .brightness(configuration.isPressed ? 0.1 : 0)
             .animation(.spring(response: 0.22, dampingFraction: 0.55), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { _, pressed in
-                if pressed {
-                    #if !targetEnvironment(macCatalyst)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    #endif
-                }
-            }
     }
 }
 
@@ -219,13 +205,6 @@ struct MenuItemStyle: ButtonStyle {
             .offset(x: configuration.isPressed ? 4 : 0)
             .opacity(configuration.isPressed ? 0.80 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { _, pressed in
-                if pressed {
-                    #if !targetEnvironment(macCatalyst)
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    #endif
-                }
-            }
     }
 }
 
@@ -235,13 +214,6 @@ struct ChipStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.90 : 1.0)
             .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { _, pressed in
-                if pressed {
-                    #if !targetEnvironment(macCatalyst)
-                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-                    #endif
-                }
-            }
     }
 }
 
