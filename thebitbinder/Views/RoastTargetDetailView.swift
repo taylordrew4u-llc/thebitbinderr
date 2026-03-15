@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct RoastTargetDetailView: View {
     @Environment(\.modelContext) private var modelContext
@@ -15,6 +16,9 @@ struct RoastTargetDetailView: View {
 
     @State private var showingAddRoast = false
     @State private var editingJoke: RoastJoke?
+    @State private var showingEditTarget = false
+    @State private var showingTalkToText = false
+    @State private var showingRecordingSheet = false
     @State private var searchText = ""
 
     private let accentColor = AppTheme.Colors.roastAccent
@@ -24,7 +28,6 @@ struct RoastTargetDetailView: View {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if trimmed.isEmpty { return sorted }
         return sorted.filter {
-            $0.title.lowercased().contains(trimmed) ||
             $0.content.lowercased().contains(trimmed)
         }
     }
@@ -119,9 +122,25 @@ struct RoastTargetDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search roasts")
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .navigationBarLeading) {
                 Button {
-                    showingAddRoast = true
+                    showingEditTarget = true
+                } label: {
+                    Image(systemName: "pencil")
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: { showingAddRoast = true }) {
+                        Label("Add Manually", systemImage: "square.and.pencil")
+                    }
+                    Button(action: { showingTalkToText = true }) {
+                        Label("Talk-to-Text", systemImage: "mic.badge.plus")
+                    }
+                    Divider()
+                    Button(action: { showingRecordingSheet = true }) {
+                        Label("Record Set", systemImage: "record.circle")
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -132,6 +151,15 @@ struct RoastTargetDetailView: View {
         }
         .sheet(item: $editingJoke) { joke in
             EditRoastJokeView(joke: joke)
+        }
+        .sheet(isPresented: $showingEditTarget) {
+            EditRoastTargetView(target: target)
+        }
+        .sheet(isPresented: $showingTalkToText) {
+            TalkToTextRoastView(target: target)
+        }
+        .sheet(isPresented: $showingRecordingSheet) {
+            RecordRoastSetView(target: target)
         }
     }
 
@@ -163,12 +191,9 @@ struct RoastJokeRow: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(joke.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
                 Text(joke.content)
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 15))
+                    .foregroundColor(.primary)
                     .lineLimit(3)
                 Text(joke.dateCreated, format: .dateTime.month(.abbreviated).day())
                     .font(.caption2)
@@ -189,9 +214,6 @@ struct EditRoastJokeView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Title") {
-                    TextField("Roast title", text: $joke.title)
-                }
                 Section("Roast") {
                     TextEditor(text: $joke.content)
                         .frame(minHeight: 150)
@@ -210,6 +232,109 @@ struct EditRoastJokeView: View {
                         dismiss()
                     }
                     .disabled(joke.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Edit Roast Target Sheet
+
+struct EditRoastTargetView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var target: RoastTarget
+
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var photoImage: UIImage?
+
+    private let accentColor = AppTheme.Colors.roastAccent
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                // Photo section
+                Section {
+                    HStack {
+                        Spacer()
+                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                            if let photoImage {
+                                Image(uiImage: photoImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(accentColor, lineWidth: 3))
+                            } else if let photoData = target.photoData,
+                                      let uiImage = UIImage(data: photoData) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(accentColor, lineWidth: 3))
+                            } else {
+                                ZStack {
+                                    Circle()
+                                        .fill(accentColor.opacity(0.12))
+                                        .frame(width: 100, height: 100)
+                                    VStack(spacing: 4) {
+                                        Image(systemName: "person.crop.circle.badge.plus")
+                                            .font(.system(size: 32))
+                                            .foregroundColor(accentColor)
+                                        Text("Add Photo")
+                                            .font(.caption2)
+                                            .foregroundColor(accentColor)
+                                    }
+                                }
+                            }
+                        }
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
+
+                Section("Name") {
+                    TextField("Name", text: $target.name)
+                        .font(.headline)
+                }
+
+                Section("Notes (optional)") {
+                    TextField("e.g. friend, coworker, celebrity...", text: $target.notes)
+                }
+            }
+            .navigationTitle("Edit \(target.name)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if let photoImage = photoImage, let photoData = photoImage.jpegData(compressionQuality: 0.8) {
+                            target.photoData = photoData
+                        }
+                        target.dateModified = Date()
+                        try? modelContext.save()
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(target.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onChange(of: selectedPhoto) { _, newValue in
+                Task {
+                    if let data = try? await newValue?.loadTransferable(type: Data.self) {
+                        await MainActor.run {
+                            target.photoData = data
+                            photoImage = UIImage(data: data)
+                        }
+                    }
+                }
+            }
+            .onAppear {
+                if let photoData = target.photoData {
+                    photoImage = UIImage(data: photoData)
                 }
             }
         }

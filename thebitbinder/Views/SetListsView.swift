@@ -127,7 +127,7 @@ struct SetListRowView: View {
                     .lineLimit(1)
 
                 HStack(spacing: 10) {
-                    Label("\(setList.jokeIDs.count) jokes", systemImage: "text.quote")
+                    Label(roastMode ? "\(setList.roastJokeIDs.count) roasts" : "\(setList.jokeIDs.count) jokes", systemImage: roastMode ? "flame.fill" : "text.quote")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(accent.opacity(0.85))
                     Spacer()

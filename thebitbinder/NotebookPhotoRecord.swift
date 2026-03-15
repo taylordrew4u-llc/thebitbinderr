@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class NotebookPhotoRecord: Identifiable {
-    @Attribute(.unique) var id: UUID = UUID()
+    var id: UUID = UUID()
     var caption: String = ""
     var fileURL: String = ""
     var createdAt: Date = Date()

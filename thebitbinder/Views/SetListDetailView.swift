@@ -1,4 +1,4 @@
-//
+
 //  SetListDetailView.swift
 //  thebitbinder
 //
@@ -12,6 +12,8 @@ import AVFoundation
 struct SetListDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var jokes: [Joke]
+    @Query private var roastJokes: [RoastJoke]
+    @AppStorage("roastModeEnabled") private var roastMode = false
     
     @Bindable var setList: SetList
     @State private var showingAddJokes = false
@@ -28,6 +30,12 @@ struct SetListDetailView: View {
     var setListJokes: [Joke] {
         setList.jokeIDs.compactMap { jokeID in
             jokes.first { $0.id == jokeID }
+        }
+    }
+    
+    var setListRoastJokes: [RoastJoke] {
+        setList.roastJokeIDs.compactMap { roastID in
+            roastJokes.first { $0.id == roastID }
         }
     }
     
@@ -80,32 +88,64 @@ struct SetListDetailView: View {
             .padding()
             .background(Color(.systemGray6))
             
-            if setListJokes.isEmpty {
-                VStack(spacing: 20) {
-                    Image(systemName: "text.bubble")
-                        .font(.system(size: 60))
-                        .foregroundColor(.gray)
-                    Text("No jokes in this set list")
-                        .font(.title3)
-                        .foregroundColor(.gray)
-                    Button(action: { showingAddJokes = true }) {
-                        Label("Add Jokes", systemImage: "plus")
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
+            if roastMode {
+                // Roast mode: show roast jokes
+                if setListRoastJokes.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "flame")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        Text("No roast jokes in this set")
+                            .font(.title3)
+                            .foregroundColor(.gray)
+                        Button(action: { showingAddJokes = true }) {
+                            Label("Add Roast Jokes", systemImage: "plus")
+                                .padding()
+                                .background(AppTheme.Colors.roastAccent)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(setListRoastJokes) { joke in
+                            roastJokeRow(joke)
+                        }
+                        .onMove(perform: moveRoastJokes)
+                        .onDelete(perform: deleteRoastJokes)
+                    }
+                    .listStyle(.plain)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
-                    ForEach(setListJokes) { joke in
-                        JokeRowView(joke: joke)
+                // Regular mode: show regular jokes
+                if setListJokes.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "text.bubble")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        Text("No jokes in this set list")
+                            .font(.title3)
+                            .foregroundColor(.gray)
+                        Button(action: { showingAddJokes = true }) {
+                            Label("Add Jokes", systemImage: "plus")
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                        }
                     }
-                    .onMove(perform: moveJokes)
-                    .onDelete(perform: deleteJokes)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(setListJokes) { joke in
+                            JokeRowView(joke: joke)
+                        }
+                        .onMove(perform: moveJokes)
+                        .onDelete(perform: deleteJokes)
+                    }
+                    .listStyle(.plain)
                 }
-                .listStyle(.plain)
             }
         }
         .navigationTitle(setList.name)
@@ -114,7 +154,7 @@ struct SetListDetailView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button(action: { showingAddJokes = true }) {
-                        Label("Add Jokes", systemImage: "plus")
+                        Label(roastMode ? "Add Roast Jokes" : "Add Jokes", systemImage: "plus")
                     }
                     
                     Button(action: { isEditing.toggle() }) {
@@ -127,7 +167,11 @@ struct SetListDetailView: View {
         }
         .environment(\.editMode, .constant(isEditing ? .active : .inactive))
         .sheet(isPresented: $showingAddJokes) {
-            AddJokesToSetListView(setList: setList, currentJokeIDs: setList.jokeIDs)
+            if roastMode {
+                AddRoastJokesToSetListView(setList: setList, currentRoastJokeIDs: setList.roastJokeIDs)
+            } else {
+                AddJokesToSetListView(setList: setList, currentJokeIDs: setList.jokeIDs)
+            }
         }
         .alert("Save Recording", isPresented: $showingSaveAlert) {
             TextField("Recording name", text: $recordingName)
@@ -210,6 +254,46 @@ struct SetListDetailView: View {
         for index in offsets {
             if index < setList.jokeIDs.count {
                 setList.jokeIDs.remove(at: index)
+            }
+        }
+        setList.dateModified = Date()
+    }
+    
+    // MARK: - Roast Joke Helpers
+    
+    @ViewBuilder
+    private func roastJokeRow(_ joke: RoastJoke) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.roastAccent)
+                .padding(.top, 3)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(joke.content)
+                    .font(.system(size: 15))
+                    .foregroundColor(.primary)
+                    .lineLimit(3)
+                
+                if let targetName = joke.target?.name {
+                    Text("for \(targetName)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.roastAccent.opacity(0.8))
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+    
+    private func moveRoastJokes(from source: IndexSet, to destination: Int) {
+        setList.roastJokeIDs.move(fromOffsets: source, toOffset: destination)
+        setList.dateModified = Date()
+    }
+    
+    private func deleteRoastJokes(at offsets: IndexSet) {
+        for index in offsets {
+            if index < setList.roastJokeIDs.count {
+                setList.roastJokeIDs.remove(at: index)
             }
         }
         setList.dateModified = Date()

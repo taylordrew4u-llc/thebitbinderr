@@ -317,27 +317,23 @@ struct AutoOrganizeView: View {
             do {
                 print("🎭 Starting analysis of \(unorganizedJokes.count) jokes...")
                 
-                // If user has custom folders, use them; otherwise let AI create
                 let availableFolders = customFolders.isEmpty ? nil : customFolders
                 
                 for joke in unorganizedJokes {
                     analysisProgress += 1
                     
-                    // Analyze joke — if custom folders exist, ask AI to pick from them
                     let analysis: JokeAnalysis
-                    if let folders = availableFolders, useCustomFoldersOnly {
-                        analysis = try await analyzeJokeWithFolders(joke.content, folders: folders)
+                    if let custom = availableFolders, useCustomFoldersOnly {
+                        analysis = try await analyzeJokeWithFolders(joke.content, folders: custom)
                     } else {
                         analysis = try await categorizationService.analyzeJoke(joke.content)
                     }
                     
-                    // Update joke with analysis results
                     joke.category = analysis.category
                     joke.tags = analysis.tags
                     joke.difficulty = analysis.difficulty
                     joke.humorRating = analysis.humorRating
                     
-                    // Create or get folder for category
                     var targetFolder = folders.first(where: { $0.name == analysis.category })
                     if targetFolder == nil {
                         targetFolder = JokeFolder(name: analysis.category)
@@ -345,7 +341,6 @@ struct AutoOrganizeView: View {
                     }
                     
                     joke.folder = targetFolder
-                    
                     print("🎭 Analyzed \(analysisProgress)/\(analysisTotal): \(analysis.category)")
                 }
                 
@@ -366,47 +361,29 @@ struct AutoOrganizeView: View {
         }
     }
     
-    /// Analyze a joke and pick from user-provided folders
+    /// Analyze a joke and pick from user-provided folders using local heuristics.
     private func analyzeJokeWithFolders(_ jokeText: String, folders: [String]) async throws -> JokeAnalysis {
-        let folderList = folders.joined(separator: ", ")
-        let prompt = """
-        Analyze this joke and categorize it into ONE of these folders: \(folderList)
+        let baseAnalysis = try await categorizationService.analyzeJoke(jokeText)
+        let normalizedJoke = jokeText.lowercased()
         
-        Pick the BEST matching folder from the list above.
-        
-        Joke: "\(jokeText)"
-        
-        Respond ONLY with valid JSON:
-        {
-          "category": "folder name from list",
-          "tags": ["tag1", "tag2"],
-          "difficulty": "Easy|Medium|Hard",
-          "humorRating": 7
-        }
-        """
-        
-        let response = try await categorizationService.sendMessage(prompt)
-        
-        // Parse the response
-        guard let jsonStart = response.firstIndex(of: "{"),
-              let jsonEnd = response.lastIndex(of: "}") else {
-            throw BitBuddyError.parseError
+        let scoredFolders: [(String, Int)] = folders.map { folder in
+            let folderLower = folder.lowercased()
+            let folderTokens = Set(folderLower.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init))
+            let jokeTokens = Set(normalizedJoke.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init))
+            let overlap = folderTokens.intersection(jokeTokens).count
+            let categoryMatch = folderLower == baseAnalysis.category.lowercased() ? 5 : 0
+            let tagMatch = baseAnalysis.tags.filter { folderLower.contains($0.lowercased()) }.count * 2
+            return (folder, overlap + categoryMatch + tagMatch)
         }
         
-        let jsonString = String(response[jsonStart...jsonEnd])
-        guard let data = jsonString.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let category = json["category"] as? String,
-              let tags = json["tags"] as? [String],
-              let difficulty = json["difficulty"] as? String,
-              let humorRating = json["humorRating"] as? Int else {
-            throw BitBuddyError.parseError
-        }
+        let bestFolder = scoredFolders.max(by: { $0.1 < $1.1 })?.0 ?? folders.first ?? baseAnalysis.category
         
-        // Ensure category is from the allowed list
-        let finalCategory = folders.first { $0.lowercased() == category.lowercased() } ?? folders.first ?? category
-        
-        return JokeAnalysis(category: finalCategory, tags: tags, difficulty: difficulty, humorRating: humorRating)
+        return JokeAnalysis(
+            category: bestFolder,
+            tags: baseAnalysis.tags,
+            difficulty: baseAnalysis.difficulty,
+            humorRating: baseAnalysis.humorRating
+        )
     }
     
     
@@ -875,7 +852,7 @@ struct FolderSetupView: View {
                 } header: {
                     Text("Options")
                 } footer: {
-                    Text(useCustomFoldersOnly 
+                    Text(useCustomFoldersOnly
                          ? "AI will only categorize into your selected folders."
                          : "AI may create new folders if jokes don't fit existing ones.")
                 }
@@ -910,48 +887,34 @@ struct FolderSetupView: View {
         
         Task {
             do {
-                // Use free usage
                 try FreeUsageTracker.shared.consumeUse(for: .jokeAnalysis)
                 
-                // Sample some jokes for analysis (don't send all to save tokens)
-                let sampleJokes = Array(unorganizedJokes.prefix(10))
-                let jokeTexts = sampleJokes.map { "- \($0.content.prefix(100))" }.joined(separator: "\n")
-                
-                let prompt = """
-                I have these comedy jokes that need organizing into folders. 
-                Analyze them and suggest 4-6 folder category names that would work well.
-                
-                Sample jokes:
-                \(jokeTexts)
-                
-                Return ONLY a JSON array of folder names, nothing else:
-                ["Folder1", "Folder2", "Folder3"]
-                """
-                
-                let response = try await bitBuddy.sendMessage(prompt)
-                
-                // Parse response
-                if let jsonStart = response.firstIndex(of: "["),
-                   let jsonEnd = response.lastIndex(of: "]") {
-                    let jsonString = String(response[jsonStart...jsonEnd])
-                    if let data = jsonString.data(using: .utf8),
-                       let folders = try? JSONSerialization.jsonObject(with: data) as? [String] {
-                        await MainActor.run {
-                            suggestedFolders = folders.filter { !$0.isEmpty }
-                            isGeneratingFolders = false
-                        }
-                        return
+                let sampleJokes = Array(unorganizedJokes.prefix(20))
+                var buckets: [String: Int] = [:]
+                for joke in sampleJokes {
+                    let analysis = try await bitBuddy.analyzeJoke(joke.content)
+                    buckets[analysis.category, default: 0] += 2
+                    for tag in analysis.tags {
+                        buckets[tag, default: 0] += 1
                     }
                 }
                 
+                let suggestions = buckets
+                    .sorted { lhs, rhs in
+                        if lhs.value == rhs.value { return lhs.key < rhs.key }
+                        return lhs.value > rhs.value
+                    }
+                    .map(\.key)
+                    .filter { !$0.isEmpty }
+                
                 await MainActor.run {
+                    suggestedFolders = Array(suggestions.prefix(6))
                     isGeneratingFolders = false
                 }
             } catch {
                 await MainActor.run {
                     isGeneratingFolders = false
                 }
-                print("❌ AI folder generation error: \(error)")
             }
         }
     }

@@ -17,6 +17,7 @@ final class SetList {
     
     // Store UUIDs as a comma-separated string to avoid SwiftData Array<UUID> issues
     private var jokeIDsString: String = ""
+    private var roastJokeIDsString: String = ""
     
     // Computed property to access as [UUID]
     var jokeIDs: [UUID] {
@@ -29,11 +30,28 @@ final class SetList {
         }
     }
     
-    init(name: String, jokeIDs: [UUID] = []) {
+    // Roast joke IDs stored the same way
+    var roastJokeIDs: [UUID] {
+        get {
+            guard !roastJokeIDsString.isEmpty else { return [] }
+            return roastJokeIDsString.split(separator: ",").compactMap { UUID(uuidString: String($0)) }
+        }
+        set {
+            roastJokeIDsString = newValue.map { $0.uuidString }.joined(separator: ",")
+        }
+    }
+    
+    /// Total number of items (regular + roast) in this set
+    var totalItemCount: Int {
+        jokeIDs.count + roastJokeIDs.count
+    }
+    
+    init(name: String, jokeIDs: [UUID] = [], roastJokeIDs: [UUID] = []) {
         self.id = UUID()
         self.name = name
         self.dateCreated = Date()
         self.dateModified = Date()
         self.jokeIDsString = jokeIDs.map { $0.uuidString }.joined(separator: ",")
+        self.roastJokeIDsString = roastJokeIDs.map { $0.uuidString }.joined(separator: ",")
     }
 }

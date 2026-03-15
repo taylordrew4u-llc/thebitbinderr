@@ -1,7 +1,8 @@
-//  TalkToTextView.swift
+//
+//  TalkToTextRoastView.swift
 //  thebitbinder
 //
-//  Created by Taylor Drew on 2/1/26.
+//  Created by Taylor Drew on 3/15/26.
 //
 
 import SwiftUI
@@ -9,12 +10,12 @@ import Speech
 import AVFoundation
 import AVFAudio
 
-struct TalkToTextView: View {
+struct TalkToTextRoastView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     
-    let selectedFolder: JokeFolder?
+    let target: RoastTarget
     
     @State private var transcribedText = ""
     @State private var isRecording = false
@@ -36,6 +37,8 @@ struct TalkToTextView: View {
         case denied
     }
     
+    private let accentColor = AppTheme.Colors.roastAccent
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
@@ -43,22 +46,22 @@ struct TalkToTextView: View {
                 VStack(spacing: 12) {
                     ZStack {
                         Circle()
-                            .fill(isRecording ? Color.red.opacity(0.15) : Color.blue.opacity(0.1))
+                            .fill(isRecording ? Color.red.opacity(0.15) : accentColor.opacity(0.1))
                             .frame(width: 100, height: 100)
                             .scaleEffect(isRecording ? 1.1 : 1.0)
                             .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isRecording)
                         
                         Image(systemName: isRecording ? "waveform" : "mic.fill")
                             .font(.system(size: 40))
-                            .foregroundColor(isRecording ? .red : .blue)
+                            .foregroundColor(isRecording ? .red : accentColor)
                             .symbolEffect(.variableColor, isActive: isRecording)
                     }
                     
-                    Text(isRecording ? "Listening..." : "Talk-to-Text")
+                    Text(isRecording ? "Listening..." : "Roast Talk-to-Text")
                         .font(.title2)
                         .fontWeight(.bold)
                     
-                    Text("Speak your joke and it will be transcribed")
+                    Text("Recording for \(target.name)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -77,7 +80,7 @@ struct TalkToTextView: View {
                                 transcribedText = ""
                             }
                             .font(.caption)
-                            .foregroundColor(.blue)
+                            .foregroundColor(accentColor)
                         }
                     }
                     
@@ -131,7 +134,7 @@ struct TalkToTextView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(isRecording ? Color.red : Color.blue)
+                        .background(isRecording ? Color.red : accentColor)
                         .foregroundColor(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
@@ -140,12 +143,12 @@ struct TalkToTextView: View {
                     // Save button (only show when there's text and not recording)
                     if !transcribedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isRecording {
                         Button {
-                            saveJoke()
+                            saveRoast()
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 20))
-                                Text("Save as Joke")
+                                Text("Save as Roast")
                                     .fontWeight(.semibold)
                             }
                             .frame(maxWidth: .infinity)
@@ -209,7 +212,6 @@ struct TalkToTextView: View {
                     showingPermissionAlert = true
                 }
             } else {
-                // Request permissions
                 await requestPermissions()
             }
         }
@@ -242,14 +244,12 @@ struct TalkToTextView: View {
     }
     
     private func requestPermissions() async {
-        // Request speech recognition permission
         let speechGranted = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
             }
         }
         
-        // Request microphone permission
         let micGranted = await requestMicPermission()
         
         await MainActor.run {
@@ -282,9 +282,7 @@ struct TalkToTextView: View {
             return
         }
         
-        // Stop any prior session first
         speechRecognizer.stopTranscribing()
-        
         errorMessage = nil
         isRecording = true
         speechRecognizer.startTranscribing()
@@ -295,15 +293,13 @@ struct TalkToTextView: View {
         speechRecognizer.stopTranscribing()
     }
     
-    private func saveJoke() {
+    private func saveRoast() {
         let text = transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         
-        // Create the joke
-        let newJoke = Joke(
+        let newJoke = RoastJoke(
             content: text,
-            title: generateTitle(from: text),
-            folder: selectedFolder
+            target: target
         )
         
         modelContext.insert(newJoke)
@@ -311,123 +307,4 @@ struct TalkToTextView: View {
         
         dismiss()
     }
-    
-    private func generateTitle(from text: String) -> String {
-        let words = text.components(separatedBy: .whitespacesAndNewlines)
-        let titleWords = words.prefix(5).joined(separator: " ")
-        if words.count > 5 {
-            return titleWords + "..."
-        }
-        return titleWords
-    }
-}
-
-// MARK: - Speech Recognizer
-class SpeechRecognizer: ObservableObject {
-    @Published var transcribedText = ""
-    @Published var error: String?
-    
-    private var audioEngine: AVAudioEngine?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
-    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-    
-    func startTranscribing() {
-        // Reset
-        transcribedText = ""
-        error = nil
-        
-        // Check if speech recognizer is available
-        guard let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
-            error = "Speech recognition is not available"
-            return
-        }
-        
-        // Configure audio session for recording
-        let audioSession = AVAudioSession.sharedInstance()
-        do {
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch {
-            self.error = "Failed to configure audio session: \(error.localizedDescription)"
-            return
-        }
-        
-        // Create recognition request
-        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else {
-            error = "Unable to create recognition request"
-            return
-        }
-        
-        recognitionRequest.shouldReportPartialResults = true
-        recognitionRequest.addsPunctuation = true
-        
-        // Set up audio engine
-        audioEngine = AVAudioEngine()
-        guard let audioEngine = audioEngine else {
-            error = "Unable to create audio engine"
-            return
-        }
-        
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        
-        // Guard against invalid format (sample rate of 0 on some devices)
-        guard recordingFormat.sampleRate > 0 else {
-            self.error = "Audio input format is invalid. Please check your microphone."
-            return
-        }
-        
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
-        }
-        
-        // Start recognition task
-        recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-            if let result = result {
-                DispatchQueue.main.async {
-                    self?.transcribedText = result.bestTranscription.formattedString
-                }
-            }
-            
-            if let error = error {
-                let nsError = error as NSError
-                // Ignore cancellation errors (code 216 = user stopped, code 1110 = no speech detected)
-                if nsError.domain == "kAFAssistantErrorDomain" && (nsError.code == 216 || nsError.code == 1110) {
-                    return
-                }
-                DispatchQueue.main.async {
-                    self?.error = error.localizedDescription
-                }
-            }
-        }
-        
-        // Start audio engine
-        do {
-            audioEngine.prepare()
-            try audioEngine.start()
-        } catch {
-            self.error = "Failed to start audio engine"
-        }
-    }
-    
-    func stopTranscribing() {
-        recognitionTask?.finish()
-        recognitionRequest?.endAudio()
-        
-        audioEngine?.stop()
-        audioEngine?.inputNode.removeTap(onBus: 0)
-        
-        audioEngine = nil
-        recognitionRequest = nil
-        recognitionTask = nil
-        
-        // Deactivate audio session safely
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    }
-}
-
-#Preview {
-    TalkToTextView(selectedFolder: nil)
 }

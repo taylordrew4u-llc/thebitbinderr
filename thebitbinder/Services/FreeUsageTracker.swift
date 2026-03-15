@@ -55,6 +55,7 @@ enum UsageLimitError: LocalizedError {
 
 /// Singleton that tracks and enforces free AI usage limits per day.
 /// Publishes changes so SwiftUI views update in real time.
+@MainActor
 final class FreeUsageTracker: ObservableObject {
     
     static let shared = FreeUsageTracker()
@@ -122,17 +123,9 @@ final class FreeUsageTracker: ObservableObject {
             throw UsageLimitError.limitReached(feature: feature, resetsAt: resetsAt)
         }
         
+        // Because this class is @MainActor, this mutation always happens on the main thread
         usedToday += 1
         persist()
-        
-        // Notify UI on main thread
-        let newCount = usedToday
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if self.usedToday != newCount {
-                self.usedToday = newCount
-            }
-        }
         
         print("📊 [Usage] \(feature.displayName) used. \(remaining) of \(dailyLimit) remaining today.")
     }

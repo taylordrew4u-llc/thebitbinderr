@@ -8,145 +8,197 @@
 import Foundation
 import AVFoundation
 
-/// BitBuddy — Your comedy writing AI assistant
-/// Helps comedians fact-check, find alternative words, brainstorm punchlines,
-/// and answer any question that helps create better jokes.
-class BitBuddyService: NSObject, ObservableObject {
-    
+/// BitBuddy — Your comedy writing assistant.
+/// Uses on-device backends only: Foundation Models when available,
+/// otherwise a local rule-based fallback that keeps chat functional offline.
+@MainActor
+final class BitBuddyService: NSObject, ObservableObject {
     static let shared = BitBuddyService()
-    
-    // MARK: - Configuration
-    private let openAIAPI = "https://api.openai.com/v1/chat/completions"
-    let apiKey = "OPENAI_API_KEY_REMOVED"
-    let model = "gpt-4o-mini"
-    
-    // MARK: - System Prompt
-    private let systemPrompt = """
-    You are BitBuddy, a comedy writing assistant. Help comedians by:
-    1. Fact-checking claims, stats, and references
-    2. Suggesting funnier words, synonyms, better phrasing
-    3. Brainstorming punchlines, callbacks, tags
-    4. Answering questions that help craft jokes
-    Keep responses concise and fun. English only.
-    """
     
     // MARK: - Dependencies
     private let authService = AuthService.shared
+    private let backend: BitBuddyBackend
     
     // MARK: - State
     @Published var isLoading = false
     @Published var isConnected = false
+    @Published private(set) var backendName: String
+    @Published private(set) var isUsingLocalFallback: Bool
     
+    private let maxConversationTurns = 16
     private var conversationId: String?
+    private var turnsByConversation: [String: [BitBuddyTurn]] = [:]
+    private var recentJokeProvider: (() -> [BitBuddyJokeSummary])?
     
     private override init() {
+        let selectedBackend = BitBuddyBackendFactory.makeBackend()
+        self.backend = selectedBackend
+        self.backendName = selectedBackend.backendName
+        self.isUsingLocalFallback = selectedBackend.backendName == LocalFallbackBitBuddyService.shared.backendName
         super.init()
     }
     
     // MARK: - Public API
     
-    /// Send a text message and get a response from the agent
+    /// Optional hook so BitBuddy can ground responses in current app joke data.
+    func registerJokeDataProvider(_ provider: @escaping () -> [BitBuddyJokeSummary]) {
+        recentJokeProvider = provider
+    }
+    
+    /// Send a text message and get a response from the local BitBuddy backend.
     func sendMessage(_ message: String) async throws -> String {
-        // Check free usage limit before calling API
         try FreeUsageTracker.shared.consumeUse(for: .chat)
-        
-        // Ensure anonymous sign-in before making API calls
         try await authService.ensureAuthenticated()
-        await MainActor.run {
-            isLoading = true
-        }
         
-        defer {
-            Task { @MainActor in
-                isLoading = false
-            }
-        }
+        isLoading = true
+        defer { isLoading = false }
         
-        print("🤖 [BitBuddy] Sending message: \(message)")
+        let activeConversationId = conversationId ?? UUID().uuidString
+        conversationId = activeConversationId
+        appendTurn(.init(role: .user, text: message), conversationId: activeConversationId)
+        
+        let session = BitBuddySessionSnapshot(
+            conversationId: activeConversationId,
+            turns: turnsByConversation[activeConversationId] ?? []
+        )
+        let dataContext = BitBuddyDataContext(recentJokes: recentJokeProvider?() ?? [])
         
         do {
-            let response = try await callOpenAIAPI(message)
-            print("🤖 [BitBuddy] Received response: \(response)")
+            let response = try await backend.send(message: message, session: session, dataContext: dataContext)
+            appendTurn(.init(role: .assistant, text: response), conversationId: activeConversationId)
+            isConnected = true
             return response
         } catch {
-            print("❌ [BitBuddy] Error: \(error.localizedDescription)")
+            isConnected = false
             throw error
         }
     }
     
-    /// Start a new conversation
+    /// Start a new conversation.
     func startNewConversation() {
+        if let conversationId {
+            turnsByConversation[conversationId] = []
+        }
         conversationId = nil
         isConnected = false
     }
     
-    // MARK: - OpenAI API Methods
+    /// Analyze a single joke and return category, tags, difficulty, and humor rating.
+    /// Local-only heuristic fallback keeps this feature working without external APIs.
+    func analyzeJoke(_ jokeText: String) async throws -> JokeAnalysis {
+        try FreeUsageTracker.shared.consumeUse(for: .jokeAnalysis)
+        try await authService.ensureAuthenticated()
+        
+        let lower = jokeText.lowercased()
+        let category = inferCategory(from: lower)
+        let tags = inferTags(from: lower)
+        let difficulty = inferDifficulty(from: jokeText)
+        let humorRating = inferHumorRating(from: jokeText)
+        
+        return JokeAnalysis(
+            category: category,
+            tags: tags,
+            difficulty: difficulty,
+            humorRating: humorRating
+        )
+    }
     
-    private func callOpenAIAPI(_ message: String) async throws -> String {
-        guard let url = URL(string: openAIAPI) else {
-            print("❌ [BitBuddy] Invalid URL")
-            throw BitBuddyError.invalidResponse
-        }
+    /// Extract jokes from raw text using local structural heuristics.
+    func extractJokes(from text: String) async throws -> [String] {
+        try FreeUsageTracker.shared.consumeUse(for: .jokeExtract)
+        try await authService.ensureAuthenticated()
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 60
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        let rawParts = normalized
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         
-        let body: [String: Any] = [
-            "model": model,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": message]
-            ]
-        ]
+        var jokes: [String] = []
+        var currentBlock: [String] = []
         
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        print("🤖 [BitBuddy] Sending request...")
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ [BitBuddy] Invalid response type")
-            throw BitBuddyError.invalidResponse
-        }
-        
-        let responseString = String(data: data, encoding: .utf8) ?? "No data"
-        print("🤖 [BitBuddy] Response Status: \(httpResponse.statusCode)")
-        
-        if httpResponse.statusCode == 200 {
-            await MainActor.run {
-                isConnected = true
+        for line in rawParts {
+            if line.isEmpty {
+                if !currentBlock.isEmpty {
+                    jokes.append(currentBlock.joined(separator: "\n"))
+                    currentBlock.removeAll()
+                }
+                continue
             }
             
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let choices = json["choices"] as? [[String: Any]],
-               let firstChoice = choices.first,
-               let message = firstChoice["message"] as? [String: Any],
-               let content = message["content"] as? String {
-                return content
-            }
+            let isBullet = line.hasPrefix("-") || line.hasPrefix("•") || line.hasPrefix("*")
+            let isNumbered = line.range(of: #"^\d+[\.)]\s"#, options: .regularExpression) != nil
             
-            throw BitBuddyError.parseError
-        } else if httpResponse.statusCode == 429 {
-            throw BitBuddyError.apiError(statusCode: 429, message: "API quota exceeded.")
-        } else if httpResponse.statusCode == 401 {
-            throw BitBuddyError.apiError(statusCode: 401, message: "Invalid API key")
+            if (isBullet || isNumbered), !currentBlock.isEmpty {
+                jokes.append(currentBlock.joined(separator: "\n"))
+                currentBlock = [stripListMarker(from: line)]
+            } else {
+                currentBlock.append(isBullet || isNumbered ? stripListMarker(from: line) : line)
+            }
         }
         
-        print("❌ [BitBuddy] HTTP Error \(httpResponse.statusCode): \(responseString)")
-        throw BitBuddyError.apiError(statusCode: httpResponse.statusCode, message: responseString)
+        if !currentBlock.isEmpty {
+            jokes.append(currentBlock.joined(separator: "\n"))
+        }
+        
+        let filtered = jokes
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        
+        if filtered.isEmpty, !normalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return [normalized.trimmingCharacters(in: .whitespacesAndNewlines)]
+        }
+        
+        return filtered
+    }
+    
+    /// Analyze multiple jokes and group them by category.
+    func analyzeMultipleJokes(_ jokes: [Joke]) async throws -> [String: [Joke]] {
+        var categorized: [String: [Joke]] = [:]
+        
+        for joke in jokes {
+            let analysis = try await analyzeJoke(joke.content)
+            if categorized[analysis.category] == nil {
+                categorized[analysis.category] = []
+            }
+            
+            let updatedJoke = Joke(content: joke.content, title: joke.title, folder: joke.folder)
+            updatedJoke.category = analysis.category
+            updatedJoke.tags = analysis.tags
+            updatedJoke.difficulty = analysis.difficulty
+            updatedJoke.humorRating = analysis.humorRating
+            categorized[analysis.category]?.append(updatedJoke)
+        }
+        
+        return categorized
+    }
+    
+    /// Get organization suggestions for a set of jokes using local reasoning.
+    func getOrganizationSuggestions(for jokes: [Joke]) async throws -> String {
+        try FreeUsageTracker.shared.consumeUse(for: .orgSuggestion)
+        try await authService.ensureAuthenticated()
+        
+        let grouped = Dictionary(grouping: jokes) { inferCategory(from: $0.content.lowercased()) }
+        let lines = grouped.keys.sorted().map { category in
+            let count = grouped[category]?.count ?? 0
+            return "• \(category): \(count) joke\(count == 1 ? "" : "s")"
+        }
+        
+        return """
+        Here’s a local organization pass:
+        \(lines.joined(separator: "\n"))
+        
+        Suggested order:
+        1. Start with the most accessible observational material.
+        2. Group darker or weirder bits once trust is built.
+        3. Save act-out or callback-heavy material for later in the set.
+        """
     }
     
     // MARK: - Audio Recording/Playback
-    // Use weak-like cleanup pattern to free memory
     private var audioRecorder: AVAudioRecorder?
     private var audioPlayer: AVAudioPlayer?
     private var recordedAudioURL: URL? = nil
     
-    /// Clean up audio resources to free memory
     func cleanupAudioResources() {
         audioRecorder?.stop()
         audioRecorder = nil
@@ -158,7 +210,6 @@ class BitBuddyService: NSObject, ObservableObject {
         recordedAudioURL = nil
     }
     
-    /// Start recording audio from the microphone
     func startRecording() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
@@ -180,7 +231,6 @@ class BitBuddyService: NSObject, ObservableObject {
         audioRecorder?.record()
     }
     
-    /// Stop recording and return the file URL
     func stopRecording() -> URL? {
         audioRecorder?.stop()
         let url = recordedAudioURL
@@ -188,237 +238,92 @@ class BitBuddyService: NSObject, ObservableObject {
         return url
     }
     
-    /// Play audio from a given URL
     func playAudio(from url: URL) throws {
         audioPlayer = try AVAudioPlayer(contentsOf: url)
         audioPlayer?.prepareToPlay()
         audioPlayer?.play()
     }
     
-    /// Play audio from Data
     func playAudio(data: Data) throws {
         audioPlayer = try AVAudioPlayer(data: data)
         audioPlayer?.prepareToPlay()
         audioPlayer?.play()
     }
     
-    /// Send recorded audio to the agent and get a response
     func sendAudio(_ audioURL: URL) async throws -> String {
-        // Check free usage limit before calling API
         try FreeUsageTracker.shared.consumeUse(for: .chat)
-        
-        // Ensure anonymous sign-in before making API calls
         try await authService.ensureAuthenticated()
         
-        await MainActor.run { isLoading = true }
-        defer { Task { @MainActor in isLoading = false } }
+        isLoading = true
+        defer { isLoading = false }
         
         guard (try? Data(contentsOf: audioURL)) != nil else {
             throw BitBuddyError.invalidResponse
         }
-
-        print("🤖 [BitBuddy] Sending audio message as text...")
-        let response = try await sendMessage("User sent an audio message")
-        return response
+        
+        return try await sendMessage("User sent an audio message and wants feedback on the recorded idea.")
     }
     
-    // MARK: - Joke Extraction (consolidated from AIJokeExtractionService)
+    // MARK: - Private helpers
     
-    /// Extract jokes from raw text using AI analysis
-    /// Returns an array of individual jokes separated by AI understanding
-    func extractJokes(from text: String) async throws -> [String] {
-        try FreeUsageTracker.shared.consumeUse(for: .jokeExtract)
-        try await authService.ensureAuthenticated()
-        
-        print("🤖 [AI Extract] Starting AI-powered extraction from \(text.count) chars...")
-        
-        guard !text.isEmpty else {
-            print("❌ [AI Extract] Empty text")
-            return []
+    private func appendTurn(_ turn: BitBuddyTurn, conversationId: String) {
+        var turns = turnsByConversation[conversationId] ?? []
+        turns.append(turn)
+        if turns.count > maxConversationTurns {
+            turns = Array(turns.suffix(maxConversationTurns))
         }
-        
-        let prompt = """
-        You are an expert at identifying and separating individual jokes from text.
-        
-        Analyze this text which contains jokes. Your task is to:
-        1. Identify each individual joke
-        2. Separate them clearly
-        3. Return ONLY a JSON array with the jokes
-        
-        Important:
-        - Each joke should be complete and standalone
-        - Remove any list markers (1., 2., -, •, etc.)
-        - Preserve the joke content exactly
-        - If a joke spans multiple lines, keep it together
-        - Ignore any non-joke text
-        
-        Text to analyze:
-        \"\"\"
-        \(text)
-        \"\"\"
-        
-        Return ONLY valid JSON array format, no other text:
-        ["joke1", "joke2", "joke3", ...]
-        """
-        
-        let response = try await callOpenAIAPI(prompt)
-        let jokes = try parseJokesFromResponse(response)
-        
-        print("🤖 [AI Extract] Found \(jokes.count) jokes via AI")
-        for (idx, joke) in jokes.enumerated() {
-            print("🤖 [AI Extract] Joke \(idx + 1): \(joke.prefix(50))...")
-        }
-        
-        return jokes
+        turnsByConversation[conversationId] = turns
     }
     
-    // MARK: - Joke Categorization (consolidated from JokeCategorizationService)
-    
-    /// Analyze a single joke and return category, tags, difficulty, and humor rating
-    func analyzeJoke(_ jokeText: String) async throws -> JokeAnalysis {
-        try FreeUsageTracker.shared.consumeUse(for: .jokeAnalysis)
-        try await authService.ensureAuthenticated()
-        
-        print("🎭 [Joke Analysis] Analyzing: \(jokeText.prefix(50))...")
-        
-        let prompt = """
-        Analyze this joke and provide:
-        1. A main category (Setup/Punchline joke, One-liner, Observational, Wordplay, Dark humor, Absurdist, etc.)
-        2. Up to 3 relevant tags (funny words or themes in the joke)
-        3. A difficulty rating (Easy, Medium, Hard - based on how well-structured it is)
-        4. A humor rating (1-10)
-        
-        Joke: "\(jokeText)"
-        
-        Respond ONLY with valid JSON in this exact format:
-        {
-          "category": "category name",
-          "tags": ["tag1", "tag2", "tag3"],
-          "difficulty": "Easy|Medium|Hard",
-          "humorRating": 7
-        }
-        
-        NO other text, ONLY valid JSON.
-        """
-        
-        let response = try await callOpenAIAPI(prompt)
-        let analysis = try parseJokeAnalysis(response)
-        print("🎭 [Joke Analysis] Category: \(analysis.category), Tags: \(analysis.tags)")
-        return analysis
+    private func stripListMarker(from line: String) -> String {
+        line
+            .replacingOccurrences(of: #"^[-•*]\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"^\d+[\.)]\s*"#, with: "", options: .regularExpression)
     }
     
-    /// Analyze multiple jokes and group them by category
-    /// Memory optimized with batch processing
-    func analyzeMultipleJokes(_ jokes: [Joke]) async throws -> [String: [Joke]] {
-        print("🎭 [Bulk Analysis] Analyzing \(jokes.count) jokes...")
-        
-        var categorized: [String: [Joke]] = [:]
-        var processedCount = 0
-        
-        for joke in jokes {
-            do {
-                let analysis = try await analyzeJoke(joke.content)
-                
-                if categorized[analysis.category] == nil {
-                    categorized[analysis.category] = []
-                }
-                
-                let updatedJoke = Joke(content: joke.content, title: joke.title, folder: joke.folder)
-                updatedJoke.category = analysis.category
-                updatedJoke.tags = analysis.tags
-                updatedJoke.difficulty = analysis.difficulty
-                updatedJoke.humorRating = analysis.humorRating
-                
-                categorized[analysis.category]?.append(updatedJoke)
-                processedCount += 1
-                print("🎭 [Bulk Analysis] Processed \(processedCount)/\(jokes.count)")
-            } catch {
-                print("❌ [Joke Analysis] Error: \(error.localizedDescription)")
-                continue
-            }
+    private func inferCategory(from lower: String) -> String {
+        if lower.contains("dating") || lower.contains("girlfriend") || lower.contains("boyfriend") || lower.contains("wife") || lower.contains("husband") {
+            return "Relationships"
         }
-        
-        print("🎭 [Bulk Analysis] Complete! \(categorized.count) categories")
-        return categorized
+        if lower.contains("work") || lower.contains("office") || lower.contains("boss") || lower.contains("coworker") || lower.contains("job") {
+            return "Work"
+        }
+        if lower.contains("family") || lower.contains("mom") || lower.contains("dad") || lower.contains("parent") || lower.contains("child") {
+            return "Family"
+        }
+        if lower.contains("airplane") || lower.contains("airport") || lower.contains("uber") || lower.contains("driving") || lower.contains("travel") {
+            return "Travel"
+        }
+        if lower.contains("phone") || lower.contains("app") || lower.contains("internet") || lower.contains("ai") || lower.contains("tech") {
+            return "Technology"
+        }
+        if lower.contains("body") || lower.contains("doctor") || lower.contains("therapy") || lower.contains("anxiety") || lower.contains("gym") {
+            return "Personal"
+        }
+        return "Observational"
     }
     
-    /// Get organization suggestions for a set of jokes
-    func getOrganizationSuggestions(for jokes: [Joke]) async throws -> String {
-        try FreeUsageTracker.shared.consumeUse(for: .orgSuggestion)
-        try await authService.ensureAuthenticated()
-        
-        let jokesList = jokes.map { "- \($0.content)" }.joined(separator: "\n")
-        
-        let prompt = """
-        I have these jokes that I'm trying to organize for a comedy set:
-        
-        \(jokesList)
-        
-        Please suggest:
-        1. Best order to perform these jokes
-        2. Which jokes work well together
-        3. Which jokes might have similar audiences
-        4. Any potential redundancy or similar themes
-        """
-        
-        return try await callOpenAIAPI(prompt)
+    private func inferTags(from lower: String) -> [String] {
+        let candidatePairs: [(String, String)] = [
+            ("dating", "dating"), ("relationship", "relationship"), ("work", "work"),
+            ("family", "family"), ("travel", "travel"), ("airport", "airport"),
+            ("tech", "tech"), ("phone", "phone"), ("gym", "gym"),
+            ("therapy", "therapy"), ("money", "money"), ("food", "food")
+        ]
+        let tags = candidatePairs.compactMap { lower.contains($0.0) ? $0.1.capitalized : nil }
+        return Array(tags.prefix(3))
     }
     
-    // MARK: - Private Parsing Helpers
-    
-    private func parseJokesFromResponse(_ response: String) throws -> [String] {
-        let jsonString: String
-        
-        if let jsonStart = response.firstIndex(of: "["),
-           let jsonEnd = response.lastIndex(of: "]") {
-            jsonString = String(response[jsonStart...jsonEnd])
-        } else {
-            print("❌ [BitBuddy] No JSON array found in response")
-            throw BitBuddyError.parseError
-        }
-        
-        guard let data = jsonString.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String] else {
-            print("❌ [BitBuddy] Failed to parse JSON array")
-            throw BitBuddyError.parseError
-        }
-        
-        let jokes = json
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty && $0.count >= 5 }
-        
-        print("✅ [BitBuddy] Successfully parsed \(jokes.count) jokes")
-        return jokes
+    private func inferDifficulty(from text: String) -> String {
+        if text.count < 60 { return "Easy" }
+        if text.count < 180 { return "Medium" }
+        return "Hard"
     }
     
-    private func parseJokeAnalysis(_ response: String) throws -> JokeAnalysis {
-        let jsonString: String
-        
-        if let jsonStart = response.firstIndex(of: "{"),
-           let jsonEnd = response.lastIndex(of: "}") {
-            jsonString = String(response[jsonStart...jsonEnd])
-        } else {
-            throw BitBuddyError.parseError
-        }
-        
-        guard let data = jsonString.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw BitBuddyError.parseError
-        }
-        
-        guard let category = json["category"] as? String,
-              let tags = json["tags"] as? [String],
-              let difficulty = json["difficulty"] as? String,
-              let humorRating = json["humorRating"] as? Int else {
-            throw BitBuddyError.parseError
-        }
-        
-        return JokeAnalysis(
-            category: category,
-            tags: tags,
-            difficulty: difficulty,
-            humorRating: humorRating
-        )
+    private func inferHumorRating(from text: String) -> Int {
+        let lengthBonus = min(text.count / 40, 3)
+        let punctuationBonus = text.contains("?") || text.contains("!") ? 1 : 0
+        return min(5 + lengthBonus + punctuationBonus, 9)
     }
 }
 
@@ -432,6 +337,7 @@ struct JokeAnalysis {
 }
 
 // MARK: - Errors
+
 enum BitBuddyError: LocalizedError {
     case invalidResponse
     case apiError(statusCode: Int, message: String)
@@ -441,21 +347,16 @@ enum BitBuddyError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            return "Invalid response from server"
-        case .apiError(let statusCode, let message):
-            return "API Error (\(statusCode)): \(message)"
+            return "Invalid response from BitBuddy"
+        case .apiError(_, let message):
+            return message
         case .parseError:
-            return "Failed to parse response"
+            return "BitBuddy couldn't understand that request"
         case .notConnected:
-            return "Not connected to BitBuddy"
+            return "BitBuddy isn't available right now"
         }
     }
 }
 
-extension BitBuddyService: AVAudioRecorderDelegate {
-    // AVAudioRecorderDelegate methods (if needed) can be implemented here
-}
-
-extension BitBuddyService: AVAudioPlayerDelegate {
-    // AVAudioPlayerDelegate methods (if needed) can be implemented here
-}
+extension BitBuddyService: AVAudioRecorderDelegate {}
+extension BitBuddyService: AVAudioPlayerDelegate {}

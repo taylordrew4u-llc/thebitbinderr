@@ -29,6 +29,7 @@ struct JokesSheetsModifier: ViewModifier {
     @Binding var folderPendingDeletion: JokeFolder?
     let reviewCandidates: [JokeImportCandidate]
     let possibleDuplicates: [String]
+    let unresolvedFragments: [UnresolvedImportFragment]
     let processScannedImages: ([UIImage]) -> Void
     let processDocuments: ([URL]) -> Void
     let moveJokes: (JokeFolder, JokeFolder?) -> Void
@@ -77,7 +78,9 @@ struct JokesSheetsModifier: ViewModifier {
                 ReviewImportsSheet(
                     showingReviewSheet: $showingReviewSheet,
                     reviewCandidates: reviewCandidates,
-                    possibleDuplicates: possibleDuplicates
+                    possibleDuplicates: possibleDuplicates,
+                    unresolvedFragments: unresolvedFragments,
+                    selectedFolder: selectedFolder
                 )
             }
     }
@@ -265,9 +268,12 @@ struct ImportProgressCard: View {
 // MARK: - Review Imports Sheet (extracted)
 
 struct ReviewImportsSheet: View {
+    @Environment(\.modelContext) private var modelContext
     @Binding var showingReviewSheet: Bool
     let reviewCandidates: [JokeImportCandidate]
     let possibleDuplicates: [String]
+    let unresolvedFragments: [UnresolvedImportFragment]
+    let selectedFolder: JokeFolder?
 
     var body: some View {
         NavigationStack {
@@ -280,15 +286,29 @@ struct ReviewImportsSheet: View {
                         }
                     }
                 }
-                Section("Needs Review") {
-                    ForEach(Array(reviewCandidates.enumerated()), id: \.element.id) { index, cand in
-                        VStack(alignment: .leading, spacing: 8) {
-                            TextField("Title", text: .constant(cand.suggestedTitle))
-                                .textFieldStyle(.roundedBorder)
-                            Text(cand.content)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .lineLimit(6)
+                if !unresolvedFragments.isEmpty {
+                    Section("Unresolved Fragments") {
+                        ForEach(unresolvedFragments.filter { !$0.isResolved }) { fragment in
+                            UnresolvedFragmentRow(
+                                fragment: fragment,
+                                selectedFolder: selectedFolder,
+                                onSaveAsJoke: { saveFragmentAsJoke($0) },
+                                onMarkResolved: { markResolved($0) }
+                            )
+                        }
+                    }
+                }
+                if !reviewCandidates.isEmpty {
+                    Section("Needs Review") {
+                        ForEach(Array(reviewCandidates.enumerated()), id: \.element.id) { _, cand in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TextField("Title", text: .constant(cand.suggestedTitle))
+                                    .textFieldStyle(.roundedBorder)
+                                Text(cand.content)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(6)
+                            }
                         }
                     }
                 }
@@ -300,5 +320,82 @@ struct ReviewImportsSheet: View {
                 }
             }
         }
+    }
+    
+    private func saveFragmentAsJoke(_ fragment: UnresolvedImportFragment) {
+        let title = fragment.titleCandidate?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? fragment.titleCandidate!
+            : String(fragment.text.prefix(40))
+        let joke = Joke(content: fragment.text, title: title, folder: selectedFolder)
+        joke.tags = fragment.tags
+        modelContext.insert(joke)
+        fragment.isResolved = true
+        try? modelContext.save()
+    }
+    
+    private func markResolved(_ fragment: UnresolvedImportFragment) {
+        fragment.isResolved = true
+        try? modelContext.save()
+    }
+}
+
+struct UnresolvedFragmentRow: View {
+    let fragment: UnresolvedImportFragment
+    let selectedFolder: JokeFolder?
+    let onSaveAsJoke: (UnresolvedImportFragment) -> Void
+    let onMarkResolved: (UnresolvedImportFragment) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(fragment.titleCandidate ?? "Recovered Fragment")
+                    .font(.headline)
+                Spacer()
+                Text(fragment.confidence.capitalized)
+                    .font(.caption.bold())
+                    .foregroundStyle(fragment.confidence == "high" ? .green : fragment.confidence == "medium" ? .orange : .red)
+            }
+            
+            Text(fragment.text)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(8)
+            
+            HStack(spacing: 12) {
+                Text(fragment.kind.capitalized)
+                    .font(.caption2)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.12))
+                    .cornerRadius(6)
+                Text(fragment.sourceFilename)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                if let page = fragment.sourcePage {
+                    Text("Page \(page)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            HStack(spacing: 10) {
+                Button {
+                    onSaveAsJoke(fragment)
+                } label: {
+                    Label("Save as Joke", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                
+                Button {
+                    onMarkResolved(fragment)
+                } label: {
+                    Label("Mark Resolved", systemImage: "checkmark.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }

@@ -12,6 +12,8 @@ struct iCloudSyncSettingsView: View {
     @State private var showingSyncConfirmation = false
     @State private var isCheckingAvailability = false
     @State private var iCloudAvailable = true
+    @State private var diagnosticResults: [String] = []
+    @State private var showingDiagnostics = false
     
     var body: some View {
         ScrollView {
@@ -167,7 +169,8 @@ struct iCloudSyncSettingsView: View {
                     
                     VStack(spacing: 10) {
                         SyncItemRow(icon: "lightbulb.fill", label: "Thoughts & Ideas", detail: "Your notepad content and quick thoughts")
-                        SyncItemRow(icon: "text.quote", label: "Jokes & Roasts", detail: "All your jokes and roast targets")
+                        SyncItemRow(icon: "text.quote", label: "Jokes", detail: "All your jokes, folders, and categories")
+                        SyncItemRow(icon: "flame.fill", label: "Roast Targets & Jokes", detail: "All roast targets and their jokes")
                         SyncItemRow(icon: "list.bullet.rectangle", label: "Set Lists", detail: "Your comedy set lists")
                         SyncItemRow(icon: "waveform", label: "Voice Recordings", detail: "All voice memos and recordings")
                         SyncItemRow(icon: "photo.on.rectangle", label: "Notebook Photos", detail: "Scanned notebook pages")
@@ -211,6 +214,43 @@ struct iCloudSyncSettingsView: View {
                     }
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.success.opacity(0.08)))
+                }
+                
+                // Diagnostics
+                VStack(alignment: .leading, spacing: 12) {
+                    Button {
+                        Task {
+                            diagnosticResults = await syncService.runDiagnostics()
+                            showingDiagnostics = true
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "wrench.and.screwdriver")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Run Sync Diagnostics")
+                                .font(.system(size: 15, weight: .semibold, design: .serif))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.surfaceElevated))
+                        .foregroundColor(AppTheme.Colors.inkBlack)
+                    }
+                    
+                    if showingDiagnostics {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(diagnosticResults, id: \.self) { result in
+                                Text(result)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(.systemGray6)))
+                    }
                 }
             }
             .padding(16)

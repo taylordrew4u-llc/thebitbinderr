@@ -87,6 +87,7 @@ final class iCloudSyncService: NSObject, ObservableObject {
         // Sync all data types
         await syncJokes()
         await syncRoastTargets()
+        await syncRoastJokes()
         await syncSetLists()
         await syncRecordings()
         await syncNotebookPhotos()
@@ -106,7 +107,14 @@ final class iCloudSyncService: NSObject, ObservableObject {
     
     private func syncRoastTargets() async {
         // RoastTargets sync handled via SwiftData CloudKit integration
+        // The @Relationship to RoastJoke ensures targets and their jokes stay linked
         print("✅ Roast targets synced")
+    }
+    
+    private func syncRoastJokes() async {
+        // RoastJokes sync handled via SwiftData CloudKit integration
+        // Each RoastJoke has a REFERENCE back to its RoastTarget, synced automatically
+        print("✅ Roast jokes synced")
     }
     
     private func syncSetLists() async {
@@ -186,10 +194,70 @@ final class iCloudSyncService: NSObject, ObservableObject {
     func checkiCloudAvailability() async -> Bool {
         do {
             let status = try await container.accountStatus()
-            return status == .available
+            switch status {
+            case .available:
+                print("✅ [iCloud] Account available")
+                return true
+            case .noAccount:
+                print("❌ [iCloud] No account — user not signed into iCloud")
+                errorMessage = "Sign in to iCloud in Settings → [Your Name] → iCloud"
+            case .restricted:
+                print("❌ [iCloud] Account restricted (parental controls or MDM)")
+                errorMessage = "iCloud is restricted on this device"
+            case .couldNotDetermine:
+                print("❌ [iCloud] Could not determine account status")
+                errorMessage = "Could not check iCloud status — try again later"
+            case .temporarilyUnavailable:
+                print("⚠️ [iCloud] Temporarily unavailable")
+                errorMessage = "iCloud is temporarily unavailable — try again later"
+            @unknown default:
+                print("❌ [iCloud] Unknown account status: \(status)")
+                errorMessage = "Unknown iCloud status"
+            }
+            return false
         } catch {
+            print("❌ [iCloud] Account check error: \(error)")
+            errorMessage = "iCloud check failed: \(error.localizedDescription)"
             return false
         }
+    }
+    
+    /// Detailed diagnostic info — call from Settings to surface issues
+    func runDiagnostics() async -> [String] {
+        var results: [String] = []
+        
+        // 1. iCloud account
+        do {
+            let status = try await container.accountStatus()
+            results.append("iCloud Account: \(status == .available ? "✅ Available" : "❌ \(status)")")
+        } catch {
+            results.append("iCloud Account: ❌ Error — \(error.localizedDescription)")
+        }
+        
+        // 2. Container ID
+        results.append("Container: iCloud.10Bit")
+        
+        // 3. Sync enabled
+        results.append("Sync Enabled: \(isSyncEnabled ? "✅ Yes" : "❌ No")")
+        
+        // 4. Last sync
+        if let lastSync = lastSyncDate {
+            results.append("Last Sync: \(lastSync.formatted(date: .abbreviated, time: .shortened))")
+        } else {
+            results.append("Last Sync: Never")
+        }
+        
+        // 5. Try a test fetch to verify CloudKit connectivity
+        do {
+            let database = container.privateCloudDatabase
+            let query = CKQuery(recordType: "CD_RoastTarget", predicate: NSPredicate(value: true))
+            let (matchResults, _) = try await database.records(matching: query, resultsLimit: 1)
+            results.append("CloudKit Fetch Test: ✅ Connected (\(matchResults.count) result(s))")
+        } catch {
+            results.append("CloudKit Fetch Test: ❌ \(error.localizedDescription)")
+        }
+        
+        return results
     }
 }
 

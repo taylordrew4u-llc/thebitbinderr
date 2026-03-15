@@ -6,10 +6,13 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// Full-screen AI chat view accessed from the side menu
 struct BitBuddyAIChatView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Joke.dateCreated, order: .reverse) private var jokes: [Joke]
     @StateObject private var bitBuddy = BitBuddyService.shared
     
     @StateObject private var authService = AuthService.shared
@@ -23,6 +26,18 @@ struct BitBuddyAIChatView: View {
             // Usage Banner
             AIUsageBanner()
                 .padding(.top, 8)
+            
+            if bitBuddy.isUsingLocalFallback {
+                HStack(spacing: 8) {
+                    Image(systemName: "iphone.gen3.radiowaves.left.and.right")
+                    Text("BitBuddy is running in local offline mode.")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(AppTheme.Colors.aiAccent)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
             
             // Messages View
             ScrollViewReader { proxy in
@@ -99,6 +114,7 @@ struct BitBuddyAIChatView: View {
                 Button {
                     messages.removeAll()
                     conversationId = UUID().uuidString
+                    bitBuddy.startNewConversation()
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
@@ -107,6 +123,17 @@ struct BitBuddyAIChatView: View {
         }
         .onAppear {
             handleAppear()
+            bitBuddy.registerJokeDataProvider {
+                jokes.prefix(25).map {
+                    BitBuddyJokeSummary(
+                        id: $0.id,
+                        title: $0.title,
+                        content: $0.content,
+                        tags: $0.tags,
+                        dateCreated: $0.dateCreated
+                    )
+                }
+            }
         }
         .onDisappear {
             messages.removeAll()
@@ -127,24 +154,24 @@ struct BitBuddyAIChatView: View {
         guard !message.isEmpty else { return }
         guard !bitBuddy.isLoading else { return }
         
-        let userMessage = ChatMessage(text: message, isUser: true)
+        let userMessage = ChatMessage(text: message, isUser: true, conversationId: conversationId)
         messages.append(userMessage)
         inputText = ""
         
         Task {
             do {
                 let response = try await bitBuddy.sendMessage(message)
-                let aiMessage = ChatMessage(text: response, isUser: false)
+                let aiMessage = ChatMessage(text: response, isUser: false, conversationId: conversationId)
                 await MainActor.run {
                     messages.append(aiMessage)
                 }
             } catch let error as UsageLimitError {
-                let limitMsg = ChatMessage(text: error.localizedDescription, isUser: false)
+                let limitMsg = ChatMessage(text: error.localizedDescription, isUser: false, conversationId: conversationId)
                 await MainActor.run {
                     messages.append(limitMsg)
                 }
             } catch {
-                let errorMsg = ChatMessage(text: "Sorry, I encountered an error. Please try again.", isUser: false)
+                let errorMsg = ChatMessage(text: "Sorry, I encountered an error. Please try again.", isUser: false, conversationId: conversationId)
                 await MainActor.run {
                     messages.append(errorMsg)
                 }

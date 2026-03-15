@@ -38,10 +38,12 @@ struct thebitbinderApp: App {
                 cloudKitDatabase: .private("iCloud.10Bit")
             )
             let container = try ModelContainer(for: schema, configurations: [config])
-            print("✅ [ModelContainer] Persistent + CloudKit ready")
+            print("✅ [ModelContainer] Persistent + CloudKit ready at \(storeURL.path)")
+            print("✅ [ModelContainer] Schema models: Joke, JokeFolder, Recording, SetList, NotebookPhotoRecord, RoastTarget, RoastJoke, ChatMessage, BrainstormIdea")
             return container
         } catch {
             print("⚠️ [ModelContainer] CloudKit store failed: \(error)")
+            print("⚠️ [ModelContainer] Error detail: \(String(describing: error))")
         }
 
         // 2️⃣ Same file, no CloudKit — preserves existing data

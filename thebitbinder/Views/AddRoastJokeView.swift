@@ -1,5 +1,4 @@
-//
-//  AddRoastJokeView.swift
+// AddRoastJokeView.swift
 //  thebitbinder
 //
 //  Sheet to write a new roast joke for a specific target.
@@ -14,7 +13,6 @@ struct AddRoastJokeView: View {
 
     let target: RoastTarget
 
-    @State private var title = ""
     @State private var content = ""
 
     private let accentColor = AppTheme.Colors.roastAccent
@@ -52,10 +50,6 @@ struct AddRoastJokeView: View {
                     }
                 }
 
-                Section("Title (optional)") {
-                    TextField("e.g. The Hair Joke", text: $title)
-                }
-
                 Section("Write your roast") {
                     TextEditor(text: $content)
                         .frame(minHeight: 150)
@@ -84,7 +78,6 @@ struct AddRoastJokeView: View {
 
         let joke = RoastJoke(
             content: trimmedContent,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             target: target
         )
         modelContext.insert(joke)

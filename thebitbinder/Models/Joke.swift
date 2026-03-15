@@ -33,12 +33,23 @@ final class Joke {
     
     // AI categorization
     var category: String?  // Primary category from AI
-    var tags: [String] = []  // AI-suggested tags
+    private var tagsString: String = ""  // AI-suggested tags stored as comma-separated
     var difficulty: String?  // Easy, Medium, Hard
     var humorRating: Int = 0  // 1-10 rating
     
     // The Hits - perfected jokes that work every time
     var isHit: Bool = false
+    
+    // Computed property for tags
+    var tags: [String] {
+        get {
+            guard !tagsString.isEmpty else { return [] }
+            return tagsString.split(separator: ",").map { String($0) }
+        }
+        set {
+            tagsString = newValue.joined(separator: ",")
+        }
+    }
     
     // Computed property for allCategories
     var allCategories: [String] {

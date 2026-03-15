@@ -43,7 +43,8 @@ RECORD TYPE CD_SetList (
     CD_name STRING,
     CD_dateCreated TIMESTAMP,
     CD_dateModified TIMESTAMP,
-    CD_jokeIDsString STRING
+    CD_jokeIDsString STRING,
+    CD_roastJokeIDsString STRING
 );
 
 RECORD TYPE CD_BrainstormIdea (
@@ -78,4 +79,12 @@ RECORD TYPE CD_NotebookPhotoRecord (
     CD_caption STRING,
     CD_fileURL STRING,
     CD_createdAt TIMESTAMP
+);
+
+RECORD TYPE CD_ChatMessage (
+    CD_id STRING,
+    CD_text STRING,
+    CD_isUser INT64,
+    CD_timestamp TIMESTAMP,
+    CD_conversationId STRING
 );
