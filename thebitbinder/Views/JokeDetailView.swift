@@ -144,24 +144,42 @@ struct JokeDetailView: View {
                     }
                     .foregroundColor(roastMode ? AppTheme.Colors.roastAccent : nil)
                     
-                    Button(role: .destructive) {
-                        showingDeleteAlert = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
+                    if joke.isDeleted {
+                        // When viewing a trashed joke allow restore
+                        Button {
+                            joke.restoreFromTrash()
+                            dismiss()
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward")
+                                .foregroundColor(.green)
+                        }
+                    } else {
+                        Button(role: .destructive) {
+                            showingDeleteAlert = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
                     }
                 }
             }
         }
         .tint(roastMode ? AppTheme.Colors.roastAccent : AppTheme.Colors.inkBlue)
-        .alert("Delete Joke", isPresented: $showingDeleteAlert) {
-            Button("Delete", role: .destructive) {
-                modelContext.delete(joke)
-                dismiss()
+        .alert(joke.isDeleted ? "Restore Joke" : "Delete Joke", isPresented: $showingDeleteAlert) {
+            if joke.isDeleted {
+                Button("Restore") {
+                    joke.restoreFromTrash()
+                    dismiss()
+                }
+            } else {
+                Button("Move to Trash") {
+                    joke.moveToTrash()
+                    dismiss()
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Are you sure you want to delete \"\(joke.title)\"? This cannot be undone.")
+            Text(joke.isDeleted ? "Restore this joke from Trash." : "Are you sure you want to move \"\(joke.title)\" to Trash? You can restore it later.")
         }
         .sheet(isPresented: $showingFolderPicker) {
             FolderPickerView(selectedFolder: $joke.folder, folders: folders)

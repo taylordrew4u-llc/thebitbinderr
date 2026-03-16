@@ -176,6 +176,29 @@ struct SettingsView: View {
                     Text("Export your jokes as a PDF or your audio recordings as a zip archive.")
                 }
                 
+                // MARK: - Trash
+                Section {
+                    NavigationLink(destination: TrashView()) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Trash")
+                                    .foregroundColor(.primary)
+                                let trashedCount = jokes.filter { $0.isDeleted }.count
+                                Text(trashedCount > 0 ? "\(trashedCount) deleted jokes" : "No items in trash")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "trash")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                } header: {
+                    Text("Data Management")
+                } footer: {
+                    Text("View and restore deleted jokes, or permanently empty trash.")
+                }
+                
                 // MARK: - Help
                 Section {
                     NavigationLink(destination: HelpFAQView()) {

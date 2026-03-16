@@ -9,6 +9,7 @@ import Foundation
 import Combine
 
 /// Manages user preferences and basic app state (no external authentication required)
+@MainActor
 final class AuthService: ObservableObject {
     static let shared = AuthService()
     

@@ -12,11 +12,14 @@ struct HitsView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("expandAllJokes") private var expandAllJokes = false
     @AppStorage("roastModeEnabled") private var roastMode = false
-    @Query(filter: #Predicate<Joke> { $0.isHit == true },
-           sort: \Joke.dateCreated, order: .reverse)
-    private var hitJokes: [Joke]
+    @Query(sort: \Joke.dateCreated, order: .reverse)
+    private var allJokes: [Joke]
     
     @State private var searchText = ""
+    
+    private var hitJokes: [Joke] {
+        allJokes.filter { $0.isHit && !$0.isDeleted }
+    }
     
     private var filteredHits: [Joke] {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -83,7 +86,8 @@ struct HitsView: View {
                                     Label("Remove from Hits", systemImage: "star.slash")
                                 }
                                 Button(role: .destructive) {
-                                    modelContext.delete(joke)
+                                    // Soft-delete into trash
+                                    joke.moveToTrash()
                                 } label: {
                                     Label("Delete Joke", systemImage: "trash")
                                 }
@@ -97,7 +101,7 @@ struct HitsView: View {
         }
         .background(roastMode ? AppTheme.Colors.roastBackground : Color.clear)
         .navigationTitle(roastMode ? "🔥 The Hits" : "⭐ The Hits")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(roastMode ? AppTheme.Colors.roastSurface : AppTheme.Colors.paperCream, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)

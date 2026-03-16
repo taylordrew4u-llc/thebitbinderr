@@ -103,7 +103,7 @@ struct JokesView: View {
                 .foregroundColor(.secondary)
             
             // Count badge
-            let hitsCount = jokes.filter { $0.isHit }.count
+            let hitsCount = jokes.filter { $0.isHit && !$0.isDeleted }.count
             if hitsCount > 0 {
                 Text("\(hitsCount) perfected")
                     .font(.caption2)
@@ -113,7 +113,8 @@ struct JokesView: View {
         .padding(.top, 16)
         .padding(.bottom, 8)
     }
-    
+
+
     private var folderChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
@@ -299,14 +300,17 @@ struct JokesView: View {
             base = jokes
         }
         
+        // Exclude trashed jokes
+        let active = base.filter { !$0.isDeleted }
+        
         // Apply search filter if needed - use debounced text
         let trimmed = debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let filtered: [Joke]
         if trimmed.isEmpty {
-            filtered = base
+            filtered = active
         } else {
             let lower = trimmed.lowercased()
-            filtered = base.filter { matchesSearch($0, lower: lower) }
+            filtered = active.filter { matchesSearch($0, lower: lower) }
         }
         
         // Sort by dateCreated descending (newest first)
@@ -407,7 +411,7 @@ struct JokesView: View {
                 theHitsButton
                 
                 folderChips
-                
+
                 Divider()
                 if filteredJokes.isEmpty {
                     emptyState
@@ -424,7 +428,8 @@ struct JokesView: View {
                                     }
                                     .contextMenu {
                                         Button(role: .destructive) {
-                                            modelContext.delete(joke)
+                                            // Soft-delete to trash
+                                            joke.moveToTrash()
                                         } label: {
                                             Label("Delete Joke", systemImage: "trash")
                                         }
@@ -551,7 +556,8 @@ struct JokesView: View {
         let snapshot = filteredJokes
         for index in offsets {
             guard index < snapshot.count else { continue }
-            modelContext.delete(snapshot[index])
+            // Soft-delete into trash
+            snapshot[index].moveToTrash()
         }
     }
     
@@ -1133,7 +1139,12 @@ struct JokesView: View {
     }
     
     private func exportJokesToPDF() {
-        let jokesToExport = selectedFolder != nil ? filteredJokes : jokes
+        let jokesToExport: [Joke]
+        if selectedFolder != nil {
+            jokesToExport = filteredJokes
+        } else {
+            jokesToExport = jokes.filter { !$0.isDeleted }
+        }
         if let url = PDFExportService.exportJokesToPDF(jokes: jokesToExport) {
             exportedPDFURL = url
             showingExportAlert = true
