@@ -26,14 +26,10 @@ enum SyncedKeys {
     static let dailyNotifStartMinute = "dailyNotifStartMinute"
     static let dailyNotifEndMinute = "dailyNotifEndMinute"
     
-    // Auth/usage tracking
+    // Auth
     static let termsAccepted = "hasAcceptedTerms"
     static let userId = "userId"
     static let lastSyncDate = "lastSyncDate"
-    
-    // Free usage tracking
-    static let freeUsageLastReset = "free_ai_last_reset_date"
-    static let freeUsageCount = "free_ai_used_count"
     
     /// All keys that should be mirrored between UserDefaults and iCloud KV store
     static let all: [String] = [
@@ -51,8 +47,6 @@ enum SyncedKeys {
         termsAccepted,
         userId,
         lastSyncDate,
-        freeUsageLastReset,
-        freeUsageCount,
     ]
 }
 
@@ -130,28 +124,28 @@ final class iCloudKeyValueStore {
         cloud.synchronize()
     }
     
-    // MARK: - Read
+    // MARK: - Read (offline-first: local has priority for immediate access)
     
     func string(forKey key: String) -> String? {
-        cloud.string(forKey: key) ?? local.string(forKey: key)
+        // Local first for offline support, cloud syncs in background
+        local.string(forKey: key) ?? cloud.string(forKey: key)
     }
     
     func bool(forKey key: String) -> Bool {
-        cloud.bool(forKey: key)
+        // Local first for offline support
+        local.bool(forKey: key)
     }
     
     func data(forKey key: String) -> Data? {
-        cloud.data(forKey: key) ?? local.data(forKey: key)
+        local.data(forKey: key) ?? cloud.data(forKey: key)
     }
     
     func integer(forKey key: String) -> Int {
-        let cloudVal = cloud.object(forKey: key) as? Int
-        return cloudVal ?? local.integer(forKey: key)
+        local.integer(forKey: key)
     }
     
     func double(forKey key: String) -> Double {
-        let cloudVal = cloud.object(forKey: key) as? Double
-        return cloudVal ?? local.double(forKey: key)
+        local.double(forKey: key)
     }
     
     // MARK: - Auto-push on UserDefaults change

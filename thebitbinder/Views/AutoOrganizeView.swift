@@ -16,7 +16,6 @@ struct AutoOrganizeView: View {
     @Query private var folders: [JokeFolder]
     
     private let categorizationService = BitBuddyService.shared
-    @ObservedObject private var usageTracker = FreeUsageTracker.shared
     
     @State private var categories = AutoOrganizeService.getCategories()
     @State private var showOrganizationSummary = false
@@ -47,37 +46,32 @@ struct AutoOrganizeView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(spacing: 16) {
-                        // AI Usage Banner
-                        AIUsageBanner()
-                            .padding(.top, 8)
-                        
                         // Quick Auto-Organize Button
                         if !unorganizedJokes.isEmpty {
-                            if usageTracker.hasUsesRemaining {
-                                VStack(spacing: 12) {
-                                    // Setup Folders Button
-                                    Button(action: { showFolderSetup = true }) {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: "folder.badge.gearshape")
-                                                .font(.system(size: 16, weight: .semibold))
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text("Setup Folders First")
-                                                    .font(.headline)
-                                                Text("Create folders or let AI suggest them")
-                                                    .font(.caption)
-                                                    .foregroundColor(.white.opacity(0.8))
-                                            }
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .font(.system(size: 14, weight: .semibold))
+                            VStack(spacing: 12) {
+                                // Setup Folders Button
+                                Button(action: { showFolderSetup = true }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "folder.badge.gearshape")
+                                            .font(.system(size: 16, weight: .semibold))
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Setup Folders First")
+                                                .font(.headline)
+                                            Text("Create folders or let AI suggest them")
+                                                .font(.caption)
+                                                .foregroundColor(.white.opacity(0.8))
                                         }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 14, weight: .semibold))
                                     }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(
-                                        LinearGradient(
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    LinearGradient(
                                             gradient: Gradient(colors: [.purple.opacity(0.8), .purple.opacity(0.6)]),
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -132,10 +126,6 @@ struct AutoOrganizeView: View {
                                     .cornerRadius(10)
                                 }
                                 .padding()
-                            } else {
-                                // No free uses left
-                                AIUsageLockedView(featureName: "auto-organize uses")
-                            }
                         }
                         
                         // Unorganized Jokes Section
@@ -717,7 +707,6 @@ struct FolderSetupView: View {
     @State private var newFolderName = ""
     @State private var isGeneratingFolders = false
     @State private var suggestedFolders: [String] = []
-    @ObservedObject private var usageTracker = FreeUsageTracker.shared
     
     private let bitBuddy = BitBuddyService.shared
     
@@ -746,7 +735,7 @@ struct FolderSetupView: View {
                             Spacer()
                         }
                     }
-                    .disabled(isGeneratingFolders || !usageTracker.hasUsesRemaining)
+                    .disabled(isGeneratingFolders)
                     
                     if !suggestedFolders.isEmpty {
                         ForEach(suggestedFolders, id: \.self) { folder in
@@ -887,8 +876,6 @@ struct FolderSetupView: View {
         
         Task {
             do {
-                try FreeUsageTracker.shared.consumeUse(for: .jokeAnalysis)
-                
                 let sampleJokes = Array(unorganizedJokes.prefix(20))
                 var buckets: [String: Int] = [:]
                 for joke in sampleJokes {

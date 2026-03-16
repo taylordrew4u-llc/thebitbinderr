@@ -16,17 +16,12 @@ struct BitBuddyAIChatView: View {
     @StateObject private var bitBuddy = BitBuddyService.shared
     
     @StateObject private var authService = AuthService.shared
-    @ObservedObject private var usageTracker = FreeUsageTracker.shared
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
     @State private var conversationId = UUID().uuidString
     
     var body: some View {
         VStack(spacing: 0) {
-            // Usage Banner
-            AIUsageBanner()
-                .padding(.top, 8)
-            
             if bitBuddy.isUsingLocalFallback {
                 HStack(spacing: 8) {
                     Image(systemName: "iphone.gen3.radiowaves.left.and.right")
@@ -36,7 +31,7 @@ struct BitBuddyAIChatView: View {
                 }
                 .foregroundStyle(AppTheme.Colors.aiAccent)
                 .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding(.vertical, 8)
             }
             
             // Messages View
@@ -80,25 +75,19 @@ struct BitBuddyAIChatView: View {
             VStack(spacing: 8) {
                 Divider()
                 
-                if usageTracker.hasUsesRemaining {
-                    HStack(spacing: 8) {
-                        TextField("Ask BitBuddy anything...", text: $inputText)
-                            .textFieldStyle(.roundedBorder)
-                        
-                        Button(action: sendMessage) {
-                            Image(systemName: bitBuddy.isLoading ? "hourglass" : "arrow.up.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(AppTheme.Colors.aiAccent)
-                        }
-                        .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty || bitBuddy.isLoading)
+                HStack(spacing: 8) {
+                    TextField("Ask BitBuddy anything...", text: $inputText)
+                        .textFieldStyle(.roundedBorder)
+                    
+                    Button(action: sendMessage) {
+                        Image(systemName: bitBuddy.isLoading ? "hourglass" : "arrow.up.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(AppTheme.Colors.aiAccent)
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
-                } else {
-                    AIUsageLockedView(featureName: "AI chats")
-                        .padding(.horizontal, 4)
-                        .padding(.bottom, 8)
+                    .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty || bitBuddy.isLoading)
                 }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
             }
             .background(Color(.systemBackground))
         }
@@ -164,11 +153,6 @@ struct BitBuddyAIChatView: View {
                 let aiMessage = ChatMessage(text: response, isUser: false, conversationId: conversationId)
                 await MainActor.run {
                     messages.append(aiMessage)
-                }
-            } catch let error as UsageLimitError {
-                let limitMsg = ChatMessage(text: error.localizedDescription, isUser: false, conversationId: conversationId)
-                await MainActor.run {
-                    messages.append(limitMsg)
                 }
             } catch {
                 let errorMsg = ChatMessage(text: "Sorry, I encountered an error. Please try again.", isUser: false, conversationId: conversationId)

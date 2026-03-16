@@ -47,7 +47,6 @@ final class BitBuddyService: NSObject, ObservableObject {
     
     /// Send a text message and get a response from the local BitBuddy backend.
     func sendMessage(_ message: String) async throws -> String {
-        try FreeUsageTracker.shared.consumeUse(for: .chat)
         try await authService.ensureAuthenticated()
         
         isLoading = true
@@ -86,7 +85,6 @@ final class BitBuddyService: NSObject, ObservableObject {
     /// Analyze a single joke and return category, tags, difficulty, and humor rating.
     /// Local-only heuristic fallback keeps this feature working without external APIs.
     func analyzeJoke(_ jokeText: String) async throws -> JokeAnalysis {
-        try FreeUsageTracker.shared.consumeUse(for: .jokeAnalysis)
         try await authService.ensureAuthenticated()
         
         let lower = jokeText.lowercased()
@@ -105,7 +103,6 @@ final class BitBuddyService: NSObject, ObservableObject {
     
     /// Extract jokes from raw text using local structural heuristics.
     func extractJokes(from text: String) async throws -> [String] {
-        try FreeUsageTracker.shared.consumeUse(for: .jokeExtract)
         try await authService.ensureAuthenticated()
         
         let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
@@ -174,7 +171,6 @@ final class BitBuddyService: NSObject, ObservableObject {
     
     /// Get organization suggestions for a set of jokes using local reasoning.
     func getOrganizationSuggestions(for jokes: [Joke]) async throws -> String {
-        try FreeUsageTracker.shared.consumeUse(for: .orgSuggestion)
         try await authService.ensureAuthenticated()
         
         let grouped = Dictionary(grouping: jokes) { inferCategory(from: $0.content.lowercased()) }
@@ -251,7 +247,6 @@ final class BitBuddyService: NSObject, ObservableObject {
     }
     
     func sendAudio(_ audioURL: URL) async throws -> String {
-        try FreeUsageTracker.shared.consumeUse(for: .chat)
         try await authService.ensureAuthenticated()
         
         isLoading = true
