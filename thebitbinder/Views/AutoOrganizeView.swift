@@ -101,7 +101,7 @@ struct AutoOrganizeView: View {
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text("Smart Auto-Organize")
                                                     .font(.headline)
-                                                Text(customFolders.isEmpty ? "AI will create folders" : "Using \(customFolders.count) custom folders")
+                                                Text(customFolders.isEmpty ? "Will create folders automatically" : "Using \(customFolders.count) custom folders")
                                                     .font(.caption)
                                                     .foregroundColor(.white.opacity(0.8))
                                             }
@@ -725,7 +725,7 @@ struct FolderSetupView: View {
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Generate Folders with AI")
+                                Text("Generate Smart Folders")
                                     .fontWeight(.semibold)
                                 Text("Analyze your jokes and suggest folders")
                                     .font(.caption)
@@ -769,9 +769,9 @@ struct FolderSetupView: View {
                         .foregroundColor(.purple)
                     }
                 } header: {
-                    Text("AI Suggestions")
+                    Text("Smart Suggestions")
                 } footer: {
-                    Text("AI will analyze your \(unorganizedJokes.count) jokes and suggest folder categories.")
+                    Text("BitBuddy will analyze your \(unorganizedJokes.count) jokes and suggest folder categories.")
                 }
                 
                 // Manual Create Section
@@ -842,8 +842,8 @@ struct FolderSetupView: View {
                     Text("Options")
                 } footer: {
                     Text(useCustomFoldersOnly
-                         ? "AI will only categorize into your selected folders."
-                         : "AI may create new folders if jokes don't fit existing ones.")
+                         ? "BitBuddy will only categorize into your selected folders."
+                         : "BitBuddy may create new folders if jokes don't fit existing ones.")
                 }
             }
             .navigationTitle("Setup Folders")

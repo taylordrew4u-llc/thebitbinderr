@@ -252,19 +252,17 @@ private let allSections: [FAQSectionModel] = [
         FAQItem("My sync isn't working. What do I do?",
                 "Check that you're signed into iCloud in Settings → [Your Name] → iCloud, and that BitBinder has iCloud access enabled."),
     ]),
-    FAQSectionModel(title: "BitBuddy AI", icon: "sparkles", items: [
+    FAQSectionModel(title: "BitBuddy", icon: "bubble.left.and.bubble.right.fill", items: [
         FAQItem("What is BitBuddy?",
-                "BitBuddy is your AI comedy writing assistant. Tap the ✦ sparkle button at the top of the screen to open it."),
+                "BitBuddy is your comedy writing assistant chatbot. Access it from the side menu to get help with your material."),
         FAQItem("What can BitBuddy help with?",
                 "Punching up jokes, brainstorming angles, writing callbacks, suggesting tags, structuring your set, and more."),
-        FAQItem("Is there a usage limit?",
-                "Free users get a limited number of AI interactions. Sign in to get more uses."),
         FAQItem("Are my conversations saved?",
-                "Yes — conversations are saved locally on your device and restored when you reopen the widget."),
+                "Conversations are kept during your session. Start fresh anytime by tapping the reset button."),
     ]),
     FAQSectionModel(title: "Account & Data", icon: "person.circle.fill", items: [
         FAQItem("Do I need an account?",
-                "No — the app works fully offline without an account. Sign in to unlock AI chat history and sync features."),
+                "No — the app works fully offline without an account. Sign in to unlock sync features across devices."),
         FAQItem("How do I export all my jokes?",
                 "Settings → Export → Export All Jokes. Choose PDF, email, or share sheet."),
         FAQItem("Can I delete all my data?",

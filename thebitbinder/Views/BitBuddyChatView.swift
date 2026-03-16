@@ -1,5 +1,5 @@
 //
-//  BitBuddyAIChatView.swift
+//  BitBuddyChatView.swift
 //  thebitbinder
 //
 //  Created by Taylor Drew on 2/20/26.
@@ -8,8 +8,8 @@
 import SwiftUI
 import SwiftData
 
-/// Full-screen AI chat view accessed from the side menu
-struct BitBuddyAIChatView: View {
+/// Full-screen chat view accessed from the side menu
+struct BitBuddyChatView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Joke.dateCreated, order: .reverse) private var jokes: [Joke]
@@ -271,7 +271,7 @@ struct ChatBubble: View {
             if message.isUser {
                 Spacer(minLength: 60)
             } else {
-                // AI Avatar
+                // BitBuddy Avatar
                 ZStack {
                     Circle()
                         .fill(roastMode ? AppTheme.Colors.roastCard : AppTheme.Colors.surfaceElevated)
@@ -338,6 +338,6 @@ struct RoundedCorner: Shape {
 
 #Preview {
     NavigationStack {
-        BitBuddyAIChatView()
+        BitBuddyChatView()
     }
 }

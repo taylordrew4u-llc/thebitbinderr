@@ -206,7 +206,7 @@ struct SettingsView: View {
                     }
                     
                     HStack {
-                        Text("AI Assistant")
+                        Text("Chat Assistant")
                         Spacer()
                         Text("BitBuddy")
                             .foregroundColor(.secondary)

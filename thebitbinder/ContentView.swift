@@ -250,7 +250,7 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $showAIChat) {
             NavigationStack {
-                BitBuddyAIChatView()
+                BitBuddyChatView()
             }
         }
     }
@@ -289,7 +289,7 @@ struct ModernSideMenu: View {
                     Divider()
                         .padding(.vertical, 8)
                     
-                    // BitBuddy AI Chat
+                    // BitBuddy Chat
                     Button {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showMenu = false
@@ -300,12 +300,12 @@ struct ModernSideMenu: View {
                         }
                     } label: {
                         HStack(spacing: 14) {
-                            Image(systemName: "sparkles")
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
                                 .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.aiAccent)
+                                .foregroundColor(AppTheme.Colors.brand)
                                 .frame(width: 24)
                             
-                            Text("BitBuddy AI")
+                            Text("BitBuddy")
                                 .font(.system(size: 16, weight: .regular, design: .serif))
                                 .foregroundColor(roastMode ? Color.white.opacity(0.60) : AppTheme.Colors.textSecondary)
                             
