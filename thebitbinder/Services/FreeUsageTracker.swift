@@ -100,8 +100,9 @@ final class FreeUsageTracker: ObservableObject {
     
     // MARK: - Persistence Keys
     
-    private let usedCountKey   = "free_ai_used_count"
-    private let lastResetKey   = "free_ai_last_reset_date"
+    private let usedCountKey   = SyncedKeys.freeUsageCount
+    private let lastResetKey   = SyncedKeys.freeUsageLastReset
+    private let kvStore = iCloudKeyValueStore.shared
     
     // MARK: - Init
     
@@ -146,7 +147,7 @@ final class FreeUsageTracker: ObservableObject {
             // New day — reset counter
             usedToday = 0
             let now = Date()
-            UserDefaults.standard.set(now, forKey: lastResetKey)
+            kvStore.set(now.timeIntervalSince1970, forKey: lastResetKey)
             persist()
             print("📊 [Usage] New day detected — usage counter reset to 0.")
         } else {
@@ -159,6 +160,6 @@ final class FreeUsageTracker: ObservableObject {
     }
     
     private func persist() {
-        UserDefaults.standard.set(usedToday, forKey: usedCountKey)
+        kvStore.set(usedToday, forKey: usedCountKey)
     }
 }

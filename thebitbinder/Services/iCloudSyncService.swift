@@ -26,9 +26,7 @@ final class iCloudSyncService: NSObject, ObservableObject {
     }
     
     static let shared = iCloudSyncService()
-    private let userDefaults = UserDefaults.standard
-    private let iCloudSyncEnabledKey = "iCloudSyncEnabled"
-    private let lastSyncDateKey = "lastSyncDate"
+    private let kvStore = iCloudKeyValueStore.shared
     
     // CloudKit container - uses the explicit container ID from entitlements
     private lazy var container: CKContainer = {
@@ -37,9 +35,9 @@ final class iCloudSyncService: NSObject, ObservableObject {
     
     override init() {
         super.init()
-        isSyncEnabled = userDefaults.bool(forKey: iCloudSyncEnabledKey)
-        if let lastSync = userDefaults.object(forKey: lastSyncDateKey) as? Date {
-            lastSyncDate = lastSync
+        isSyncEnabled = UserDefaults.standard.bool(forKey: SyncedKeys.iCloudSyncEnabled)
+        if let lastSyncTimestamp = UserDefaults.standard.object(forKey: SyncedKeys.lastSyncDate) as? Double {
+            lastSyncDate = Date(timeIntervalSince1970: lastSyncTimestamp)
         }
     }
     
@@ -56,7 +54,7 @@ final class iCloudSyncService: NSObject, ObservableObject {
             }
             
             isSyncEnabled = true
-            userDefaults.set(true, forKey: iCloudSyncEnabledKey)
+            kvStore.set(true, forKey: SyncedKeys.iCloudSyncEnabled)
             
             // Perform initial sync
             await performFullSync()
@@ -68,7 +66,7 @@ final class iCloudSyncService: NSObject, ObservableObject {
     
     func disableiCloudSync() {
         isSyncEnabled = false
-        userDefaults.set(false, forKey: iCloudSyncEnabledKey)
+        kvStore.set(false, forKey: SyncedKeys.iCloudSyncEnabled)
         syncStatus = .idle
         errorMessage = nil
     }
@@ -79,7 +77,10 @@ final class iCloudSyncService: NSObject, ObservableObject {
         guard isSyncEnabled else { return }
         
         syncStatus = .syncing
-        defer { lastSyncDate = Date(); userDefaults.set(lastSyncDate, forKey: lastSyncDateKey) }
+        defer {
+            lastSyncDate = Date()
+            kvStore.set(lastSyncDate!.timeIntervalSince1970, forKey: SyncedKeys.lastSyncDate)
+        }
         
         // Push user settings to iCloud KV store
         iCloudKeyValueStore.shared.pushToCloud()
@@ -137,8 +138,8 @@ final class iCloudSyncService: NSObject, ObservableObject {
     func syncThoughts(_ content: String) async {
         guard isSyncEnabled else { return }
         
-        let thoughtsKey = "iCloudThoughtsContent"
-        userDefaults.set(content, forKey: thoughtsKey)
+        // Save to iCloud KV store for sync
+        kvStore.set(content, forKey: SyncedKeys.notepadText)
         
         // Also save to CloudKit for true cloud backup
         do {

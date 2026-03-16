@@ -17,19 +17,17 @@ final class AuthService: ObservableObject {
     @Published var isAuthenticated = true
     @Published var authError: AuthServiceError?
     
-    private let userDefaults = UserDefaults.standard
-    private let termsAcceptedKey = "hasAcceptedTerms"
+    private let kvStore = iCloudKeyValueStore.shared
     
     private init() {
-        hasAcceptedTerms = userDefaults.bool(forKey: termsAcceptedKey)
+        hasAcceptedTerms = UserDefaults.standard.bool(forKey: SyncedKeys.termsAccepted)
     }
     
     // MARK: - Terms Acceptance
     
     func acceptTerms() {
         hasAcceptedTerms = true
-        userDefaults.set(true, forKey: termsAcceptedKey)
-        userDefaults.synchronize()
+        kvStore.set(true, forKey: SyncedKeys.termsAccepted)
     }
     
     // MARK: - Auth Stubs (no external auth needed)
@@ -47,12 +45,11 @@ final class AuthService: ObservableObject {
     // MARK: - User ID (for local data separation)
     
     var userId: String {
-        if let storedId = userDefaults.string(forKey: "userId") {
+        if let storedId = kvStore.string(forKey: SyncedKeys.userId) {
             return storedId
         } else {
             let newId = UUID().uuidString
-            userDefaults.set(newId, forKey: "userId")
-            userDefaults.synchronize()
+            kvStore.set(newId, forKey: SyncedKeys.userId)
             return newId
         }
     }

@@ -12,12 +12,14 @@ import UserNotifications
 final class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
 
     static let shared = NotificationManager()
+    
+    private let kvStore = iCloudKeyValueStore.shared
 
     // MARK: - Published state
 
     @Published var isEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(isEnabled, forKey: Keys.enabled)
+            kvStore.set(isEnabled, forKey: SyncedKeys.dailyNotificationsEnabled)
             if isEnabled {
                 requestPermissionAndSchedule()
             } else {
@@ -29,24 +31,18 @@ final class NotificationManager: NSObject, ObservableObject, UNUserNotificationC
     // Start / end stored as minutes‑from‑midnight (e.g. 600 = 10:00 AM)
     @Published var startMinute: Int {
         didSet {
-            UserDefaults.standard.set(startMinute, forKey: Keys.start)
+            kvStore.set(startMinute, forKey: SyncedKeys.dailyNotifStartMinute)
             rescheduleIfEnabled()
         }
     }
     @Published var endMinute: Int {
         didSet {
-            UserDefaults.standard.set(endMinute, forKey: Keys.end)
+            kvStore.set(endMinute, forKey: SyncedKeys.dailyNotifEndMinute)
             rescheduleIfEnabled()
         }
     }
 
     // MARK: - Constants
-
-    private enum Keys {
-        static let enabled = "dailyNotificationsEnabled"
-        static let start   = "dailyNotifStartMinute"
-        static let end     = "dailyNotifEndMinute"
-    }
 
     private let notifID = "com.thebitbinder.dailyReminder"
 
@@ -68,10 +64,10 @@ final class NotificationManager: NSObject, ObservableObject, UNUserNotificationC
     // MARK: - Init
 
     private override init() {
-        let ud = UserDefaults.standard
-        self.isEnabled   = ud.bool(forKey: Keys.enabled)
-        self.startMinute = ud.object(forKey: Keys.start) as? Int ?? 600   // 10:00 AM
-        self.endMinute   = ud.object(forKey: Keys.end)   as? Int ?? 1320  // 10:00 PM
+        // Read from iCloud-synced store
+        self.isEnabled   = UserDefaults.standard.bool(forKey: SyncedKeys.dailyNotificationsEnabled)
+        self.startMinute = UserDefaults.standard.object(forKey: SyncedKeys.dailyNotifStartMinute) as? Int ?? 600   // 10:00 AM
+        self.endMinute   = UserDefaults.standard.object(forKey: SyncedKeys.dailyNotifEndMinute)   as? Int ?? 1320  // 10:00 PM
         super.init()
 
         UNUserNotificationCenter.current().delegate = self

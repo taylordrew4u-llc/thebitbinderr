@@ -11,12 +11,29 @@ import Combine
 
 /// Keys that should be synced to iCloud across devices
 enum SyncedKeys {
+    // User preferences
     static let notepadText       = "notepadText"
     static let roastModeEnabled  = "roastModeEnabled"
     static let roastViewMode     = "roastViewMode"
     static let tabOrder          = "tabOrder"
     static let jokesViewMode     = "jokesViewMode"
     static let iCloudSyncEnabled = "iCloudSyncEnabled"
+    static let expandAllJokes    = "expandAllJokes"
+    static let autoOrganizeEnabled = "autoOrganizeEnabled"
+    
+    // Notification settings
+    static let dailyNotificationsEnabled = "dailyNotificationsEnabled"
+    static let dailyNotifStartMinute = "dailyNotifStartMinute"
+    static let dailyNotifEndMinute = "dailyNotifEndMinute"
+    
+    // Auth/usage tracking
+    static let termsAccepted = "hasAcceptedTerms"
+    static let userId = "userId"
+    static let lastSyncDate = "lastSyncDate"
+    
+    // Free usage tracking
+    static let freeUsageLastReset = "free_ai_last_reset_date"
+    static let freeUsageCount = "free_ai_used_count"
     
     /// All keys that should be mirrored between UserDefaults and iCloud KV store
     static let all: [String] = [
@@ -26,6 +43,16 @@ enum SyncedKeys {
         tabOrder,
         jokesViewMode,
         iCloudSyncEnabled,
+        expandAllJokes,
+        autoOrganizeEnabled,
+        dailyNotificationsEnabled,
+        dailyNotifStartMinute,
+        dailyNotifEndMinute,
+        termsAccepted,
+        userId,
+        lastSyncDate,
+        freeUsageLastReset,
+        freeUsageCount,
     ]
 }
 
@@ -96,6 +123,13 @@ final class iCloudKeyValueStore {
         cloud.synchronize()
     }
     
+    /// Set a double value and push to iCloud
+    func set(_ value: Double, forKey key: String) {
+        local.set(value, forKey: key)
+        cloud.set(value as NSNumber, forKey: key)
+        cloud.synchronize()
+    }
+    
     // MARK: - Read
     
     func string(forKey key: String) -> String? {
@@ -108,6 +142,16 @@ final class iCloudKeyValueStore {
     
     func data(forKey key: String) -> Data? {
         cloud.data(forKey: key) ?? local.data(forKey: key)
+    }
+    
+    func integer(forKey key: String) -> Int {
+        let cloudVal = cloud.object(forKey: key) as? Int
+        return cloudVal ?? local.integer(forKey: key)
+    }
+    
+    func double(forKey key: String) -> Double {
+        let cloudVal = cloud.object(forKey: key) as? Double
+        return cloudVal ?? local.double(forKey: key)
     }
     
     // MARK: - Auto-push on UserDefaults change
