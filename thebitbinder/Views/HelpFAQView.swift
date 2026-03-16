@@ -57,7 +57,7 @@ struct HelpFAQView: View {
             }
         }
         .navigationTitle("Help & FAQ")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     // Filter all FAQ items by search text

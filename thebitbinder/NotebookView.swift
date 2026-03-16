@@ -91,6 +91,7 @@ struct NotebookView: View {
                 }
             }
             .navigationTitle(roastMode ? "🔥 Fire Notebook" : "Notebook Saver")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(
                 roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
                 for: .navigationBar
@@ -221,6 +222,7 @@ struct NotebookDetailView: View {
                 Spacer()
             }
             .navigationTitle("Notebook Page")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(role: .destructive) {

@@ -190,6 +190,7 @@ struct MoveJokesSheet: View {
                 }
             }
             .navigationTitle("Move Jokes To…")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { showingMoveJokesSheet = false }
@@ -314,6 +315,7 @@ struct ReviewImportsSheet: View {
                 }
             }
             .navigationTitle("Review Imports")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { showingReviewSheet = false }

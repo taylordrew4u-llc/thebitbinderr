@@ -48,7 +48,7 @@ struct BrainstormView: View {
                 }
             }
             .navigationTitle(roastMode ? "🔥 Fire Ideas" : "Brainstorm")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(
                 roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
                 for: .navigationBar

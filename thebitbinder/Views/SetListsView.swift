@@ -76,6 +76,7 @@ struct SetListsView: View {
                 }
             }
             .navigationTitle(roastMode ? "🔥 Roast Sets" : "Set Lists")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: SetList.self) { setList in
                 SetListDetailView(setList: setList)
             }

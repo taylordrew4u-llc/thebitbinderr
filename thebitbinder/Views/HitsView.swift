@@ -97,7 +97,7 @@ struct HitsView: View {
         }
         .background(roastMode ? AppTheme.Colors.roastBackground : Color.clear)
         .navigationTitle(roastMode ? "🔥 The Hits" : "⭐ The Hits")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(roastMode ? AppTheme.Colors.roastSurface : AppTheme.Colors.paperCream, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(roastMode ? .dark : .light, for: .navigationBar)

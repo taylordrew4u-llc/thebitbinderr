@@ -43,6 +43,7 @@ struct ImportBatchHistoryView: View {
                 }
             }
             .navigationTitle("Import History")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $selectedBatch) { batch in
                 ImportBatchDetailView(batch: batch)
             }
@@ -112,6 +113,7 @@ struct ImportBatchDetailView: View {
                 }
             }
             .navigationTitle("Import Batch")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }

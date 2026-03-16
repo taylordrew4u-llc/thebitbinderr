@@ -74,6 +74,7 @@ struct RecordingsView: View {
                 }
             }
             .navigationTitle(roastMode ? "🔥 Burn Recordings" : "Recordings")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: roastMode ? "Search recordings" : "Search recordings")
             .toolbarBackground(
                 roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),

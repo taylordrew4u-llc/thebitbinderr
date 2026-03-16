@@ -15,7 +15,7 @@ struct HomeView: View {
             ModernNotepad(text: $notepadText)
                 .ignoresSafeArea(edges: .bottom)
                 .navigationTitle(roastMode ? "🔥 Fire Notepad" : "Notepad")
-                .navigationBarTitleDisplayMode(.large)
+                .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(
                     roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),
                     for: .navigationBar

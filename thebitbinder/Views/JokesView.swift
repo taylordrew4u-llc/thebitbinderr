@@ -321,6 +321,7 @@ struct JokesView: View {
                         .ignoresSafeArea()
                 )
                 .navigationTitle(roastMode ? "🔥 Roasts" : "Jokes")
+                .navigationBarTitleDisplayMode(.inline)
                 .searchable(text: $searchText, prompt: roastMode ? "Search targets" : "Search jokes")
                 .toolbarBackground(
                     roastMode ? AnyShapeStyle(AppTheme.Colors.roastSurface) : AnyShapeStyle(AppTheme.Colors.paperCream),

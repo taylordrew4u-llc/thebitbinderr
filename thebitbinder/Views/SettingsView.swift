@@ -216,6 +216,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
             .confirmationDialog("Export Jokes", isPresented: $showExportOptions) {
                 Button("Save PDF to Device") {
                     exportJokesAndSave()
