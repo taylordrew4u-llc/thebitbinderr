@@ -23,7 +23,6 @@ final class BitBuddyService: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var isConnected = false
     @Published private(set) var backendName: String
-    @Published private(set) var isUsingLocalFallback: Bool
     
     private let maxConversationTurns = 16
     private var conversationId: String?
@@ -34,7 +33,6 @@ final class BitBuddyService: NSObject, ObservableObject {
         let selectedBackend = BitBuddyBackendFactory.makeBackend()
         self.backend = selectedBackend
         self.backendName = selectedBackend.backendName
-        self.isUsingLocalFallback = selectedBackend.backendName == LocalFallbackBitBuddyService.shared.backendName
         super.init()
     }
     

@@ -22,18 +22,6 @@ struct BitBuddyAIChatView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            if bitBuddy.isUsingLocalFallback {
-                HStack(spacing: 8) {
-                    Image(systemName: "iphone.gen3.radiowaves.left.and.right")
-                    Text("BitBuddy is running in local offline mode.")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                }
-                .foregroundStyle(AppTheme.Colors.aiAccent)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-            }
-            
             // Messages View
             ScrollViewReader { proxy in
                 ScrollView {
