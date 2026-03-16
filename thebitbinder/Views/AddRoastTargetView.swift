@@ -117,9 +117,12 @@ struct AddRoastTargetView: View {
             
             try modelContext.save()
             print("✅ [AddRoastTargetView] Successfully saved: \(target.name) (ID: \(target.id))")
+            print("📝 [AddRoastTargetView] ModelContext transaction complete, flushing changes...")
             
-            // Force a brief delay to ensure database write is complete before dismissing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Force a complete transaction flush and allow Query to refresh
+            // Increase delay to 1 second to ensure SwiftData detects the change
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                print("📝 [AddRoastTargetView] Dismissing after full query refresh")
                 dismiss()
             }
         } catch {
