@@ -13,6 +13,8 @@ struct thebitbinderApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var startup = AppStartupCoordinator()
     @StateObject private var userPreferences = UserPreferences()
+    
+    var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Joke.self,
             JokeFolder.self,
