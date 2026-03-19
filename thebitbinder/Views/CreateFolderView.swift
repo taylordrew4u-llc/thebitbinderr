@@ -52,6 +52,7 @@ struct CreateFolderView: View {
     private func createFolder() {
         let folder = JokeFolder(name: folderName)
         modelContext.insert(folder)
+        try? modelContext.save()
         dismiss()
     }
 }

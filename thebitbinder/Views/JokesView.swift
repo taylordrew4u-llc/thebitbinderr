@@ -27,6 +27,18 @@ struct JokesView: View {
     @AppStorage("jokesViewMode") private var viewMode: JokesViewMode = .grid
     @AppStorage("roastViewMode") private var roastViewMode: JokesViewMode = .list
     @AppStorage("expandAllJokes") private var expandAllJokes = false
+    @AppStorage("jokesGridScale") private var jokesGridScale: Double = 1.0
+    @AppStorage("roastGridScale") private var roastGridScale: Double = 1.0
+
+    // Grid columns derived from scale
+    private var jokesColumns: [GridItem] {
+        let count = max(2, Int(4 / jokesGridScale))
+        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
+    }
+    private var roastColumns: [GridItem] {
+        let count = max(2, Int(4 / roastGridScale))
+        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
+    }
     
     @State private var showingAddJoke = false
     @State private var showingScanner = false
@@ -235,28 +247,50 @@ struct JokesView: View {
             .padding(40)
         } else {
             if roastViewMode == .grid {
-                ScrollView {
-                    LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12)
-                    ], spacing: 12) {
-                        ForEach(roastTargets) { target in
-                            NavigationLink(destination: RoastTargetDetailView(target: target)) {
-                                RoastTargetGridCard(target: target)
-                            }
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    roastTargetToDelete = target
-                                    showingDeleteRoastAlert = true
-                                } label: {
-                                    Label("Delete Target", systemImage: "trash")
+                VStack(spacing: 0) {
+                    // Zoom slider
+                    HStack(spacing: 16) {
+                        Image(systemName: "minus.magnifyingglass")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.roastAccent.opacity(0.7))
+                        Slider(value: $roastGridScale, in: 0.5...2.0, step: 0.1)
+                            .tint(AppTheme.Colors.roastAccent)
+                        Image(systemName: "plus.magnifyingglass")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.roastAccent.opacity(0.7))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(AppTheme.Colors.surfaceElevated)
+                            .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+
+                    ScrollView {
+                        LazyVGrid(columns: roastColumns, spacing: 10) {
+                            ForEach(roastTargets) { target in
+                                NavigationLink(destination: RoastTargetDetailView(target: target)) {
+                                    RoastTargetGridCard(target: target, scale: CGFloat(roastGridScale))
+                                }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        roastTargetToDelete = target
+                                        showingDeleteRoastAlert = true
+                                    } label: {
+                                        Label("Delete Target", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
+                        .padding(12)
+                        .animation(.easeOut(duration: 0.2), value: roastGridScale)
                     }
-                    .padding(12)
+                    .scrollContentBackground(.hidden)
                 }
-                .scrollContentBackground(.hidden)
             } else {
                 List {
                     // Roast target list
@@ -417,28 +451,49 @@ struct JokesView: View {
                     emptyState
                 } else {
                     if viewMode == .grid {
-                        ScrollView {
-                            LazyVGrid(columns: [
-                                GridItem(.flexible(), spacing: 12),
-                                GridItem(.flexible(), spacing: 12)
-                            ], spacing: 12) {
-                                ForEach(filteredJokes) { joke in
-                                    NavigationLink(destination: JokeDetailView(joke: joke)) {
-                                        JokeCardView(joke: joke)
-                                    }
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            // Soft-delete to trash
-                                            joke.moveToTrash()
-                                        } label: {
-                                            Label("Delete Joke", systemImage: "trash")
+                        VStack(spacing: 0) {
+                            // Zoom slider
+                            HStack(spacing: 16) {
+                                Image(systemName: "minus.magnifyingglass")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.jokesAccent.opacity(0.7))
+                                Slider(value: $jokesGridScale, in: 0.5...2.0, step: 0.1)
+                                    .tint(AppTheme.Colors.jokesAccent)
+                                Image(systemName: "plus.magnifyingglass")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.jokesAccent.opacity(0.7))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(AppTheme.Colors.surfaceElevated)
+                                    .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                            .padding(.bottom, 4)
+
+                            ScrollView {
+                                LazyVGrid(columns: jokesColumns, spacing: 10) {
+                                    ForEach(filteredJokes) { joke in
+                                        NavigationLink(destination: JokeDetailView(joke: joke)) {
+                                            JokeCardView(joke: joke, scale: CGFloat(jokesGridScale))
+                                        }
+                                        .contextMenu {
+                                            Button(role: .destructive) {
+                                                joke.moveToTrash()
+                                            } label: {
+                                                Label("Delete Joke", systemImage: "trash")
+                                            }
                                         }
                                     }
                                 }
+                                .padding(12)
+                                .animation(.easeOut(duration: 0.2), value: jokesGridScale)
                             }
-                            .padding(12)
+                            .scrollContentBackground(.hidden)
                         }
-                        .scrollContentBackground(.hidden)
                     } else {
                         List {
                             ForEach(filteredJokes) { joke in
@@ -1363,48 +1418,54 @@ enum JokesViewMode: String, CaseIterable {
 
 struct JokeCardView: View {
     let joke: Joke
+    var scale: CGFloat = 1.0
     @AppStorage("expandAllJokes") private var expandAllJokes = false
-    
+
+    private var titleSize: CGFloat { max(11, 17 * scale) }
+    private var bodySize: CGFloat  { max(9,  15 * scale) }
+    private var metaSize: CGFloat  { max(8,  11 * scale) }
+    private var cardMinHeight: CGFloat { max(100, 180 * scale) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: max(4, 12 * scale)) {
             // Title
             Text(joke.title)
-                .font(.system(size: 17, weight: .bold, design: .serif))
+                .font(.system(size: titleSize, weight: .bold, design: .serif))
                 .foregroundColor(AppTheme.Colors.inkBlack)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-            
+
             // Content preview
             Text(joke.content)
-                .font(.system(size: 15))
+                .font(.system(size: bodySize))
                 .foregroundColor(AppTheme.Colors.textSecondary)
-                .lineLimit(expandAllJokes ? nil : 5)
+                .lineLimit(expandAllJokes ? nil : max(2, Int(5 * scale)))
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             Spacer(minLength: 0)
-            
+
             // Footer
             HStack(spacing: 8) {
                 if let folder = joke.folder {
                     HStack(spacing: 4) {
                         Image(systemName: "folder.fill")
-                            .font(.system(size: 9))
+                            .font(.system(size: max(7, 9 * scale)))
                         Text(folder.name)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: metaSize, weight: .medium))
                     }
                     .foregroundColor(AppTheme.Colors.jokesAccent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, max(4, 8 * scale))
+                    .padding(.vertical, max(2, 4 * scale))
                     .background(Capsule().fill(AppTheme.Colors.jokesAccent.opacity(0.1)))
                 }
                 Spacer()
                 Text(joke.dateCreated.formatted(.dateTime.month(.abbreviated).day()))
-                    .font(.system(size: 11))
+                    .font(.system(size: metaSize))
                     .foregroundColor(AppTheme.Colors.textTertiary)
             }
         }
-        .padding(16)
-        .frame(minHeight: 180)
+        .padding(max(8, 16 * scale))
+        .frame(minHeight: cardMinHeight)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AppTheme.Colors.surfaceElevated))
         .shadow(color: .black.opacity(0.04), radius: 3, y: 1)
     }
@@ -1414,49 +1475,57 @@ struct JokeCardView: View {
 
 struct RoastTargetGridCard: View {
     let target: RoastTarget
+    var scale: CGFloat = 1.0
     private let accentColor = AppTheme.Colors.roastAccent
 
+    private var avatarSize: CGFloat { max(40, 70 * scale) }
+    private var initialFontSize: CGFloat { max(16, 28 * scale) }
+    private var nameFontSize: CGFloat { max(10, 15 * scale) }
+    private var badgeFontSize: CGFloat { max(8, 12 * scale) }
+    private var iconSize: CGFloat { max(6, 10 * scale) }
+    private var verticalPadding: CGFloat { max(12, 18 * scale) }
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: max(8, 12 * scale)) {
             // Avatar
             if let photoData = target.photoData,
                let uiImage = UIImage(data: photoData) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 70, height: 70)
+                    .frame(width: avatarSize, height: avatarSize)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(accentColor.opacity(0.5), lineWidth: 2))
             } else {
                 ZStack {
                     Circle()
                         .fill(accentColor.opacity(0.15))
-                        .frame(width: 70, height: 70)
+                        .frame(width: avatarSize, height: avatarSize)
                     Text(target.name.prefix(1).uppercased())
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.system(size: initialFontSize, weight: .bold, design: .rounded))
                         .foregroundColor(accentColor)
                 }
             }
 
             // Name
             Text(target.name)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: nameFontSize, weight: .semibold))
                 .foregroundColor(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
 
             // Joke count badge
-            HStack(spacing: 4) {
+            HStack(spacing: max(3, 4 * scale)) {
                 Image(systemName: "flame.fill")
-                    .font(.system(size: 10))
+                    .font(.system(size: iconSize))
                     .foregroundColor(accentColor)
                 Text("\(target.jokeCount) roast\(target.jokeCount == 1 ? "" : "s")")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: badgeFontSize, weight: .medium))
                     .foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+        .padding(.vertical, verticalPadding)
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 14)

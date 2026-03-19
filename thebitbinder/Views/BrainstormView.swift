@@ -289,6 +289,7 @@ struct BrainstormView: View {
                 isVoiceNote: true
             )
             modelContext.insert(newIdea)
+            try? modelContext.save()
             speechManager.transcribedText = ""
         }
         

@@ -23,35 +23,34 @@ struct thebitbinderApp: App {
             NotebookPhotoRecord.self,
             RoastTarget.self,
             RoastJoke.self,
-            ChatMessage.self,
             BrainstormIdea.self,
             ImportBatch.self,
             ImportedJokeMetadata.self,
             UnresolvedImportFragment.self,
+            ChatMessage.self,
         ])
 
-        // Store URL — all fallback paths use the same file so data is never orphaned
+        // One store file. All fallbacks use this same URL — never switch to a
+        // different file, which would silently lose all user data.
         let storeURL = URL.applicationSupportDirectory.appending(path: "thebitbinder.store")
 
-        // 1️⃣ Try persistent + CloudKit (iCloud.10Bit)
+        // 1️⃣ Persistent + CloudKit (single container, full schema)
         do {
             let config = ModelConfiguration(
                 "BitBinderStore",
                 schema: schema,
                 url: storeURL,
                 allowsSave: true,
-                cloudKitDatabase: .private("iCloud.10Bit")
+                cloudKitDatabase: .private("iCloud.11eca8f57e7a3463ba7f91a5e4bd1738ed1dcb4337dd24ee4267582fd80dbef5")
             )
             let container = try ModelContainer(for: schema, configurations: [config])
-            print("✅ [ModelContainer] Persistent + CloudKit ready at \(storeURL.path)")
-            print("✅ [ModelContainer] Schema models: Joke, JokeFolder, Recording, SetList, NotebookPhotoRecord, RoastTarget, RoastJoke, ChatMessage, BrainstormIdea, ImportBatch, ImportedJokeMetadata, UnresolvedImportFragment")
+            print("✅ [ModelContainer] Persistent + CloudKit ready")
             return container
         } catch {
-            print("⚠️ [ModelContainer] CloudKit store failed: \(error)")
-            print("⚠️ [ModelContainer] Error detail: \(String(describing: error))")
+            print("⚠️ [ModelContainer] CloudKit failed (\(error)) — local-only fallback (same file, data preserved)")
         }
 
-        // 2️⃣ Same file, no CloudKit — preserves existing data
+        // 2️⃣ Same file, no CloudKit — all data preserved, just no sync
         do {
             let config = ModelConfiguration(
                 "BitBinderStore",
@@ -61,37 +60,35 @@ struct thebitbinderApp: App {
                 cloudKitDatabase: .none
             )
             let container = try ModelContainer(for: schema, configurations: [config])
-            print("✅ [ModelContainer] Persistent (local only) ready")
+            print("✅ [ModelContainer] Persistent local-only ready")
             return container
         } catch {
-            print("⚠️ [ModelContainer] Local store failed: \(error)")
+            // Back up corrupted store before wiping
+            let backupURL = URL.applicationSupportDirectory
+                .appending(path: "thebitbinder.store.bak-\(Int(Date().timeIntervalSince1970))")
+            try? FileManager.default.copyItem(at: storeURL, to: backupURL)
+            print("❌ [ModelContainer] Store unreadable — backed up. Error: \(error)")
         }
 
-        // 3️⃣ Fresh file, no CloudKit — schema may have changed beyond migration
+        // 3️⃣ Last resort: wipe corrupted files at same URL (backup already saved above)
+        for ext in ["", "-shm", "-wal"] {
+            try? FileManager.default.removeItem(
+                at: URL.applicationSupportDirectory.appending(path: "thebitbinder.store\(ext)")
+            )
+        }
         do {
-            let freshURL = URL.applicationSupportDirectory.appending(path: "thebitbinder_fresh.store")
             let config = ModelConfiguration(
-                "BitBinderStoreFresh",
+                "BitBinderStore",
                 schema: schema,
-                url: freshURL,
+                url: storeURL,
                 allowsSave: true,
                 cloudKitDatabase: .none
             )
             let container = try ModelContainer(for: schema, configurations: [config])
-            print("⚠️ [ModelContainer] Fresh persistent store created (old data in thebitbinder.store)")
+            print("⚠️ [ModelContainer] Fresh store at same URL (corrupted store was backed up)")
             return container
         } catch {
-            print("❌ [ModelContainer] Fresh store also failed: \(error)")
-        }
-
-        // 4️⃣ In-memory — app works but nothing persists
-        do {
-            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            let container = try ModelContainer(for: schema, configurations: [config])
-            print("❌ [ModelContainer] In-memory fallback — data will NOT persist")
-            return container
-        } catch {
-            fatalError("Cannot create any ModelContainer: \(error)")
+            fatalError("❌ [ModelContainer] Cannot create any persistent store: \(error)")
         }
     }()
 

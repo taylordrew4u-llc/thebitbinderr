@@ -7,6 +7,7 @@
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
 		<string>iCloud.10Bit</string>
+		<string>iCloud.11eca8f57e7a3463ba7f91a5e4bd1738ed1dcb4337dd24ee4267582fd80dbef5</string>
 	</array>
 	<key>com.apple.developer.icloud-services</key>
 	<array>
@@ -18,6 +19,7 @@
 	<key>com.apple.developer.ubiquity-container-identifiers</key>
 	<array>
 		<string>iCloud.10Bit</string>
+		<string>iCloud.11eca8f57e7a3463ba7f91a5e4bd1738ed1dcb4337dd24ee4267582fd80dbef5</string>
 	</array>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
 	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>

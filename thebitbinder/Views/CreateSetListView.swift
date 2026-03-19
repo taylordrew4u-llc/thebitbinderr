@@ -52,6 +52,7 @@ struct CreateSetListView: View {
     private func createSetList() {
         let setList = SetList(name: name)
         modelContext.insert(setList)
+        try? modelContext.save()
         dismiss()
     }
 }

@@ -72,6 +72,7 @@ struct AddJokeView: View {
     private func saveJoke() {
         let joke = Joke(content: content, title: title.isEmpty ? "Untitled Joke" : title, folder: selectedFolder)
         modelContext.insert(joke)
+        try? modelContext.save()
         dismiss()
     }
 }
