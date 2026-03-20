@@ -5,10 +5,7 @@
 	<key>aps-environment</key>
 	<string>development</string>
 	<key>com.apple.developer.icloud-container-environment</key>
-	<array>
-		<string>Development</string>
-		<string>Production</string>
-	</array>
+	<string>Development</string>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
 		<string>iCloud.666bit</string>
